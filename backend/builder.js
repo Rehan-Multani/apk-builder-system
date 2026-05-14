@@ -33,11 +33,13 @@ async function buildAPK(data, onProgress) {
         await updateAndroidConfig(workingDir, appName, packageName);
         
         // 5. Run Flutter Build
-        console.log(`Running flutter build for ${buildId}...`);
-        // On VPS, this will work. Locally it might fail if flutter is missing.
+        console.log(`[${buildId}] Running: flutter build apk --release`);
         const { stdout, stderr } = await execPromise('flutter build apk --release', {
             cwd: workingDir
         });
+        
+        console.log(`[${buildId}] Build Stdout:`, stdout);
+        if (stderr) console.error(`[${buildId}] Build Stderr:`, stderr);
         
         onProgress(80);
 
@@ -47,9 +49,16 @@ async function buildAPK(data, onProgress) {
         const targetPath = path.join(STORAGE_PATH, targetApkName);
 
         if (await fs.pathExists(sourceApk)) {
+            const stats = await fs.stat(sourceApk);
+            console.log(`[${buildId}] Generated APK Size: ${(stats.size / 1024).toFixed(2)} KB`);
+            
+            if (stats.size < 1024 * 1024) { // 1MB minimum
+                throw new Error(`Generated APK is too small (${(stats.size / 1024).toFixed(2)} KB). Build probably failed or is incomplete.`);
+            }
+
             await fs.copy(sourceApk, targetPath);
         } else {
-            throw new Error('APK not found after build');
+            throw new Error('APK not found after build. Check build logs for errors.');
         }
 
         // 7. Cleanup
