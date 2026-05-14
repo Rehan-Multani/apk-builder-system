@@ -77,8 +77,12 @@ const Dashboard = () => {
       if (icon) data.append('icon', icon);
       if (splashImage) data.append('splash', splashImage);
 
+      const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE}/build`, data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
       });
       setJobId(res.data.jobId);
       setStatus({ state: 'waiting', progress: 0 });
