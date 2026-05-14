@@ -10,6 +10,7 @@ const Dashboard = () => {
     appName: '',
     packageName: '',
     splashColor: '#6366f1',
+    splashMode: 'color', // 'color' or 'image'
     versionName: '1.0.0',
     versionCode: '1',
     privacyUrl: '',
@@ -153,38 +154,60 @@ const Dashboard = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    <Palette size={16} /> Splash Color
+                    <Palette size={16} /> Splash Mode
                   </label>
-                  <div className="flex gap-3">
-                    <input 
-                      type="color" 
-                      className="h-11 w-16 bg-slate-900 border-none rounded-lg cursor-pointer p-0"
-                      value={formData.splashColor}
-                      onChange={(e) => setFormData({...formData, splashColor: e.target.value})}
-                    />
-                    <div className="input-group flex-1">
-                      <input 
-                        type="text" 
-                        className="font-mono uppercase text-xs"
-                        value={formData.splashColor}
-                        onChange={(e) => setFormData({...formData, splashColor: e.target.value})}
-                      />
-                    </div>
+                  <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                    <button 
+                      type="button"
+                      onClick={() => setFormData({...formData, splashMode: 'color'})}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${formData.splashMode === 'color' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Color
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setFormData({...formData, splashMode: 'image'})}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${formData.splashMode === 'image' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                      Image
+                    </button>
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    Splash Time (Sec)
-                  </label>
-                  <div className="input-group">
-                    <input 
-                      type="number" 
-                      min="1"
-                      max="10"
-                      value={formData.splashDuration}
-                      onChange={(e) => setFormData({...formData, splashDuration: e.target.value})}
-                    />
-                  </div>
+                  {formData.splashMode === 'color' ? (
+                    <>
+                      <label className="text-sm font-medium text-slate-400">Splash Background Color</label>
+                      <div className="flex gap-3">
+                        <input 
+                          type="color" 
+                          className="h-11 w-16 bg-slate-900 border-none rounded-lg cursor-pointer p-0"
+                          value={formData.splashColor}
+                          onChange={(e) => setFormData({...formData, splashColor: e.target.value})}
+                        />
+                        <div className="input-group flex-1">
+                          <input 
+                            type="text" 
+                            className="font-mono uppercase text-xs"
+                            value={formData.splashColor}
+                            onChange={(e) => setFormData({...formData, splashColor: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-sm font-medium text-slate-400">Splash Duration (Sec)</label>
+                      <div className="input-group">
+                        <input 
+                          type="number" 
+                          min="1" max="10"
+                          value={formData.splashDuration}
+                          onChange={(e) => setFormData({...formData, splashDuration: e.target.value})}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -274,15 +297,16 @@ const Dashboard = () => {
                 </div>
 
                 {/* Splash Image Upload */}
-                <div className="space-y-3">
+                <div className={`space-y-3 transition-all duration-500 ${formData.splashMode === 'image' ? 'opacity-100 scale-100' : 'opacity-20 grayscale pointer-events-none'}`}>
                   <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
-                    <Palette size={14} className="opacity-70" /> Splash Image (Optional)
+                    <Palette size={14} className="opacity-70" /> {formData.splashMode === 'image' ? 'Splash Image (Required)' : 'Splash Image (Disabled)'}
                   </label>
                   <div 
                     className="relative"
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500'); }}
                     onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500'); }}
                     onDrop={(e) => {
+                      if (formData.splashMode !== 'image') return;
                       e.preventDefault();
                       const file = e.dataTransfer.files[0];
                       if (file && file.type.startsWith('image/')) handleSplashChange({ target: { files: [file] } });
@@ -311,10 +335,12 @@ const Dashboard = () => {
                             <Palette size={32} />
                           </div>
                           <p className="text-sm font-bold text-white mb-1">Upload Splash Image</p>
-                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">Drag & Drop or Click</p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">
+                            {formData.splashMode === 'image' ? 'Drag & Drop or Click' : 'Switch to Image Mode to upload'}
+                          </p>
                         </div>
                       )}
-                      <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} />
+                      <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} disabled={formData.splashMode !== 'image'} />
                     </label>
                   </div>
                 </div>
