@@ -33,8 +33,8 @@ async function buildAPK(data, onProgress) {
         await updateAndroidConfig(workingDir, appName, packageName);
         
         // 5. Run Flutter Build
-        console.log(`[${buildId}] Running: flutter build apk --release`);
-        const { stdout, stderr } = await execPromise('flutter build apk --release', {
+        console.log(`[${buildId}] Running: flutter build apk --release --no-tree-shake-icons`);
+        const { stdout, stderr } = await execPromise('flutter build apk --release --no-tree-shake-icons', {
             cwd: workingDir
         });
         
