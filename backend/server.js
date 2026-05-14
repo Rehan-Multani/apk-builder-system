@@ -27,9 +27,13 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// Initialize Default Admin
+// Initialize Default Admin and Fix Typos
 async function initAdmin() {
-    const adminEmail = 'admin@wapixo.com';
+    // 1. Fix the gamil.com typo if it exists
+    await User.updateOne({ email: 'admin@gamil.com' }, { email: 'admin@gmail.com' });
+    console.log('Typo fix checked: admin@gamil.com -> admin@gmail.com');
+
+    const adminEmail = 'admin@gmail.com';
     const existing = await User.findOne({ email: adminEmail });
     if (!existing) {
         await User.create({
@@ -38,7 +42,7 @@ async function initAdmin() {
             name: 'Default Admin',
             role: 'admin'
         });
-        console.log('Default admin created: admin@wapixo.com / adminpassword123');
+        console.log('Default admin created: admin@gmail.com / adminpassword123');
     }
 }
 initAdmin();
