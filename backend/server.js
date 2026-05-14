@@ -11,7 +11,10 @@ const { buildQueue } = require('./queue');
 const { User, Build } = require('./models');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: ['https://frontend.cloudedata.in', 'http://localhost:5173'],
+    credentials: true
+}));
 app.use(express.json());
 app.use('/apks', express.static(path.join(__dirname, '../apk_storage')));
 
