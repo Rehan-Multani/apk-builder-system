@@ -72,6 +72,10 @@ async function buildAPK(data, updateStatus) {
         };
 
         // APK Build
+        updateStatus(55);
+        console.log(`[${buildId}] Accepting Android Licenses...`);
+        await execPromise('yes | flutter doctor --android-licenses', { env: { ...process.env, HOME: '/root', USER: 'root' } });
+        
         updateStatus(60);
         await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons', '--no-pub']);
         
