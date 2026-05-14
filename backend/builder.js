@@ -142,9 +142,9 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         await fs.writeFile(gradlePath, gradle);
     }
 
-    // 3. Force Memory Limit in gradle.properties
+    // 3. Force Memory Limit and Disable Watching in gradle.properties
     const propsPath = path.join(buildDir, 'android/gradle.properties');
-    const memoryConfig = '\norg.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=256m -XX:+HeapDumpOnOutOfMemoryError\norg.gradle.daemon=false\n';
+    const memoryConfig = '\norg.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=256m -XX:+HeapDumpOnOutOfMemoryError\norg.gradle.daemon=false\norg.gradle.vfs.watch=false\n';
     if (await fs.pathExists(propsPath)) {
         await fs.appendFile(propsPath, memoryConfig);
     } else {
