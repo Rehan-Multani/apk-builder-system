@@ -10,6 +10,7 @@ const STORAGE_PATH = path.join(__dirname, '../apk_storage');
 
 async function buildAPK(data, onProgress) {
     const { buildId, url, appName, packageName, splashColor } = data;
+    if (!buildId) throw new Error('buildId is required but was undefined');
     const workingDir = path.join(BUILDS_PATH, buildId);
 
     try {

@@ -57,6 +57,7 @@ app.post('/api/build', authenticate, async (req, res) => {
         
         const buildData = {
             id: buildId,
+            buildId,
             url,
             appName,
             packageName: packageName || `com.example.${appName.toLowerCase().replace(/\s+/g, '')}`,
@@ -96,7 +97,7 @@ app.get('/api/status/:jobId', async (req, res) => {
     const result = job.returnvalue;
 
     // Update internal DB status
-    const build = db.builds.find(b => b.id === job.data.id);
+    const build = db.builds.find(b => b.buildId === job.data.buildId);
     if (build) {
         build.status = state;
         if (result) build.result = result;
