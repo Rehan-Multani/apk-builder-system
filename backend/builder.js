@@ -114,9 +114,6 @@ async function buildAPK(data, updateStatus) {
         await fs.ensureDir(keystoreBackupDir);
         await fs.copy(jksSource, path.join(keystoreBackupDir, jksName));
 
-        // 7. Cleanup build folder
-        await fs.remove(buildDir);
-
         return {
             apkUrl: `/apks/${apkName}`,
             aabUrl: `/apks/${aabName}`,
@@ -128,6 +125,9 @@ async function buildAPK(data, updateStatus) {
     } catch (error) {
         console.error(`[${buildId}] Build error:`, error);
         throw error;
+    } finally {
+        // Cleanup build folder ALWAYS
+        await fs.remove(buildDir);
     }
 }
 

@@ -24,6 +24,9 @@ const Dashboard = () => {
   const [iconPreview, setIconPreview] = useState(null);
   const [splashImage, setSplashImage] = useState(null);
   const [splashPreview, setSplashPreview] = useState(null);
+  const [timeElapsed, setTimeElapsed] = useState(0);
+
+  const ESTIMATED_TOTAL_TIME = 420; // 7 minutes average
 
   const handleAppNameChange = (name) => {
     const pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.app`;
@@ -61,6 +64,22 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [jobId, status]);
 
+  useEffect(() => {
+    let timer;
+    if (jobId && status?.state !== 'completed' && status?.state !== 'failed') {
+      timer = setInterval(() => {
+        setTimeElapsed(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [jobId, status]);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -87,6 +106,7 @@ const Dashboard = () => {
       });
       setJobId(res.data.jobId);
       setStatus({ state: 'waiting', progress: 0 });
+      setTimeElapsed(0);
     } catch (err) {
       alert('Failed to start build');
     } finally {
@@ -385,6 +405,22 @@ const Dashboard = () => {
                     className="progress-fill"
                     style={{ width: `${status?.progress || 0}%` }}
                   />
+                </div>
+
+                <div className="flex flex-col gap-2 p-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Time Elapsed</span>
+                    <span className="text-white font-mono">{formatTime(timeElapsed)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Estimated Max Time</span>
+                    <span className="text-indigo-400 font-bold">~7-8 Minutes</span>
+                  </div>
+                  {timeElapsed > 0 && status?.state !== 'completed' && (
+                    <div className="mt-2 text-[10px] text-slate-500 italic">
+                      * Builds take longer during Gradle compilation. Please stay on this page.
+                    </div>
+                  )}
                 </div>
 
                 {status?.state === 'completed' && (
