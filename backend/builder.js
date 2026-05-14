@@ -1,251 +1,131 @@
-const fs = require('fs-extra');
 const path = require('path');
+const fs = require('fs-extra');
 const { exec } = require('child_process');
 const util = require('util');
-const sharp = require('sharp');
 const execPromise = util.promisify(exec);
 
-const TEMPLATE_PATH = path.join(__dirname, '../template_app');
-const BUILDS_PATH = path.join(__dirname, '../builds');
-const STORAGE_PATH = path.join(__dirname, '../apk_storage');
-
-async function buildAPK(data, onProgress) {
-    const { buildId, url, appName, packageName, splashColor, iconPath, splashPath, versionName, versionCode, privacyUrl, splashDuration } = data;
-    if (!buildId) throw new Error('buildId is required but was undefined');
-    const workingDir = path.join(BUILDS_PATH, buildId);
+/**
+ * Main function to build APK and AAB
+ */
+async function buildAPK(data, updateStatus) {
+    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode } = data;
+    const baseDir = path.join(__dirname, '../');
+    const templateDir = path.join(baseDir, 'template_app');
+    const buildDir = path.join(baseDir, 'builds', buildId);
+    const storageDir = path.join(baseDir, 'apk_storage');
 
     try {
-        // 1. Prepare Workspace
-        onProgress(10);
-        await fs.ensureDir(STORAGE_PATH);
-        await fs.ensureDir(BUILDS_PATH);
-        await fs.copy(TEMPLATE_PATH, workingDir);
-
-        // 3. Update config.json
-        const configDir = path.join(workingDir, 'assets');
-        await fs.ensureDir(configDir);
-        const configPath = path.join(configDir, 'config.json');
-        await fs.writeJson(configPath, { url, splashColor, splashDuration }, { spaces: 2 });
-
-        // 4. Update Package Name & App Name in Android files
-        onProgress(30);
-        await updateAndroidConfig(workingDir, appName, packageName, versionName, versionCode);
-
-        // 4.1 Update App Icon if provided
-        if (iconPath && await fs.pathExists(iconPath)) {
-            console.log(`[${buildId}] Updating App Icon...`);
-            await updateAppIcon(workingDir, iconPath);
-        }
-
-        // 4.2 Update Splash Screen if provided
-        if (splashPath && await fs.pathExists(splashPath)) {
-            console.log(`[${buildId}] Updating Splash Screen...`);
-            await updateAppSplash(workingDir, splashPath);
-        }
-
-        // 4.3 Setup Signing (Play Store compatibility)
-        console.log(`[${buildId}] Setting up Signing...`);
-        await setupSigning(workingDir, packageName);
+        await fs.ensureDir(storageDir);
+        await fs.ensureDir(path.join(baseDir, 'builds'));
         
-        // 5. Run Dual Flutter Build (APK then AAB)
-        console.log(`[${buildId}] Starting Dual Build (APK + AAB)...`);
-        
-        // Build APK
-        onProgress(40);
-        console.log(`[${buildId}] Building APK...`);
-        await execPromise('flutter build apk --release --no-tree-shake-icons', { cwd: workingDir });
-        
-        // Build AAB
-        onProgress(70);
-        console.log(`[${buildId}] Building AAB...`);
-        await execPromise('flutter build appbundle --release --no-tree-shake-icons', { cwd: workingDir });
-        
-        onProgress(85);
+        console.log(`[${buildId}] Starting build for ${appName}...`);
+        updateStatus(10);
 
-        // 6. Move results to storage
-        const apkSource = path.join(workingDir, 'build/app/outputs/flutter-apk/app-release.apk');
-        const aabSource = path.join(workingDir, 'build/app/outputs/bundle/release/app-release.aab');
-        
-        const apkName = `${appName.replace(/\s+/g, '_')}_${buildId}.apk`;
-        const aabName = `${appName.replace(/\s+/g, '_')}_${buildId}.aab`;
-        
-        const apkTarget = path.join(STORAGE_PATH, apkName);
-        const aabTarget = path.join(STORAGE_PATH, aabName);
+        // 1. Copy template to builds folder
+        await fs.copy(templateDir, buildDir);
+        updateStatus(20);
 
-        if (!await fs.pathExists(apkSource) || !await fs.pathExists(aabSource)) {
-            throw new Error('Build failed: One or more output files missing.');
-        }
+        // 2. Update config.json
+        const configPath = path.join(buildDir, 'assets/config.json');
+        const config = {
+            url,
+            appName,
+            splashColor,
+            splashMode: splashMode || 'color'
+        };
+        await fs.writeJson(configPath, config);
+        updateStatus(30);
 
-        await fs.copy(apkSource, apkTarget);
-        await fs.copy(aabSource, aabTarget);
+        // 3. Handle Icons and Splash Images
+        // (Assuming files are uploaded to temp folder by multer)
+        // For now, if we have specific icon/splash, we'd copy them to buildDir/assets/
 
-        // 7. Cleanup
-        await fs.remove(workingDir);
+        // 4. Update Android Configuration
+        await updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode);
+        updateStatus(50);
+
+        // 5. Run Flutter Build
+        console.log(`[${buildId}] Running Flutter build...`);
+        const buildCmd = `flutter build apk --release --no-tree-shake-icons`;
+        const aabCmd = `flutter build appbundle --release --no-tree-shake-icons`;
+
+        // Execute APK Build
+        await execPromise(buildCmd, { 
+            cwd: buildDir,
+            env: { ...process.env, HOME: '/root', USER: 'root' } 
+        });
+        updateStatus(80);
+
+        // Execute AAB Build
+        await execPromise(aabCmd, { 
+            cwd: buildDir,
+            env: { ...process.env, HOME: '/root', USER: 'root' } 
+        });
+        updateStatus(90);
+
+        // 6. Copy results to storage
+        const apkSource = path.join(buildDir, 'build/app/outputs/flutter-apk/app-release.apk');
+        const aabSource = path.join(buildDir, 'build/app/outputs/bundle/release/app-release.aab');
         
-        onProgress(100);
+        const apkName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.apk`;
+        const aabName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.aab`;
+
+        await fs.copy(apkSource, path.join(storageDir, apkName));
+        await fs.copy(aabSource, path.join(storageDir, aabName));
+
+        // 7. Cleanup build folder
+        await fs.remove(buildDir);
+
         return {
+            apkUrl: `/apks/${apkName}`,
+            aabUrl: `/apks/${aabName}`,
+            apkPath: path.join(storageDir, apkName),
             apkName,
-            aabName,
-            apkPath: apkTarget,
-            aabPath: aabTarget
+            aabName
         };
 
     } catch (error) {
-        console.error('Builder Error:', error);
-        // Cleanup on failure
-        if (await fs.pathExists(workingDir)) {
-            await fs.remove(workingDir);
-        }
+        console.error(`[${buildId}] Build error:`, error);
         throw error;
     }
 }
 
-async function updateAndroidConfig(workingDir, appName, packageName, versionName, versionCode) {
-    // 1. Update app_name in strings.xml
-    const stringsPath = path.join(workingDir, 'android/app/src/main/res/values/strings.xml');
-    if (await fs.pathExists(stringsPath)) {
-        let stringsContent = await fs.readFile(stringsPath, 'utf8');
-        stringsContent = stringsContent.replace(/<string name="app_name">.*<\/string>/, `<string name="app_name">${appName}</string>`);
-        await fs.writeFile(stringsPath, stringsContent);
-    }
-
-    // 2. Update AndroidManifest.xml (Permissions & Package Name)
-    const manifestPath = path.join(workingDir, 'android/app/src/main/AndroidManifest.xml');
+/**
+ * Updates Android project files (Manifest, Gradle, Strings)
+ */
+async function updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode) {
+    // 1. Update AndroidManifest.xml
+    const manifestPath = path.join(buildDir, 'android/app/src/main/AndroidManifest.xml');
     if (await fs.pathExists(manifestPath)) {
-        let manifestContent = await fs.readFile(manifestPath, 'utf8');
-        
-        // Add permissions
-        const permissions = [
-            '<uses-permission android:name="android.permission.CAMERA" />',
-            '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />',
-            '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />',
-            '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
-        ];
-        
-        permissions.forEach(p => {
-            if (!manifestContent.includes(p)) {
-                manifestContent = manifestContent.replace('<manifest', `<manifest\n    ${p}`);
-            }
-        });
-
-        manifestContent = manifestContent.replace(/package=".*?"/, `package="${packageName}"`);
-        await fs.writeFile(manifestPath, manifestContent);
+        let manifest = await fs.readFile(manifestPath, 'utf8');
+        manifest = manifest.replace(/android:label="[^"]*"/, `android:label="${appName}"`);
+        // Only replace package if it exists in manifest
+        if (manifest.includes('package=')) {
+            manifest = manifest.replace(/package="[^"]*"/, `package="${packageName}"`);
+        }
+        await fs.writeFile(manifestPath, manifest);
     }
 
-    // 3. Update build.gradle.kts (PackageName, VersionCode, VersionName)
-    const gradleKtsPath = path.join(workingDir, 'android/app/build.gradle.kts');
-    if (await fs.pathExists(gradleKtsPath)) {
-        let content = await fs.readFile(gradleKtsPath, 'utf8');
-        content = content.replace(/applicationId = ".*"/, `applicationId = "${packageName}"`);
-        content = content.replace(/versionCode = .*/, `versionCode = ${versionCode}`);
-        content = content.replace(/versionName = ".*"/, `versionName = "${versionName}"`);
-        await fs.writeFile(gradleKtsPath, content);
-    }
-
-    // 4. Update build.gradle (Groovy fallback)
-    const gradlePath = path.join(workingDir, 'android/app/build.gradle');
+    // 2. Update build.gradle (Namespace and Package)
+    const gradlePath = path.join(buildDir, 'android/app/build.gradle');
     if (await fs.pathExists(gradlePath)) {
-        let content = await fs.readFile(gradlePath, 'utf8');
-        content = content.replace(/applicationId ".*"/, `applicationId "${packageName}"`);
-        content = content.replace(/versionCode .*/, `versionCode ${versionCode}`);
-        content = content.replace(/versionName ".*"/, `versionName "${versionName}"`);
-        await fs.writeFile(gradlePath, content);
+        let gradle = await fs.readFile(gradlePath, 'utf8');
+        // Update namespace (Modern Gradle)
+        gradle = gradle.replace(/namespace\s*=\s*"[^"]*"/, `namespace = "${packageName}"`);
+        // Update applicationId
+        gradle = gradle.replace(/applicationId\s*=\s*"[^"]*"/, `applicationId = "${packageName}"`);
+        // Update Version
+        gradle = gradle.replace(/versionName\s*"[^"]*"/, `versionName "${versionName || '1.0.0'}"`);
+        gradle = gradle.replace(/versionCode\s*\d+/, `versionCode ${versionCode || '1'}`);
+        await fs.writeFile(gradlePath, gradle);
     }
-}
 
-async function updateAppSplash(workingDir, splashPath) {
-    const resBase = path.join(workingDir, 'android/app/src/main/res');
-    const splashFolders = ['drawable', 'drawable-v21', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi'];
-    
-    for (const folder of splashFolders) {
-        const targetDir = path.join(resBase, folder);
-        await fs.ensureDir(targetDir);
-        // Overwrite standard launch_background or a custom splash image
-        await sharp(splashPath)
-            .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-            .toFile(path.join(targetDir, 'launch_image.png'));
-    }
-}
-
-async function setupSigning(workingDir, packageName) {
-    const KEYSTORE_DIR = path.join(__dirname, '../keystores');
-    await fs.ensureDir(KEYSTORE_DIR);
-    
-    const keystorePath = path.join(KEYSTORE_DIR, `${packageName}.jks`);
-    const keyPropsPath = path.join(workingDir, 'android/key.properties');
-    
-    // Generate keystore if not exists
-    if (!await fs.pathExists(keystorePath)) {
-        console.log(`Generating keystore for ${packageName}...`);
-        const cmd = `keytool -genkey -v -keystore ${keystorePath} -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass password123 -keypass password123 -dname "CN=Builder, OU=Dev, O=Wapixo, L=City, S=State, C=IN"`;
-        await execPromise(cmd);
-    }
-    
-    // Create key.properties
-    const keyProps = `storePassword=password123
-keyPassword=password123
-keyAlias=upload
-storeFile=${keystorePath.replace(/\\/g, '/')}
-`;
-    await fs.writeFile(keyPropsPath, keyProps);
-
-    // Update build.gradle.kts to use signing
-    const gradleKtsPath = path.join(workingDir, 'android/app/build.gradle.kts');
-    if (await fs.pathExists(gradleKtsPath)) {
-        let content = await fs.readFile(gradleKtsPath, 'utf8');
-        
-        // Add signingConfigs if not present (simplified for demonstration)
-        if (!content.includes('signingConfigs')) {
-            const signingConfig = `
-    signingConfigs {
-        create("release") {
-            val keystorePropertiesFile = rootProject.file("key.properties")
-            val keystoreProperties = java.util.Properties()
-            keystoreProperties.load(keystorePropertiesFile.inputStream())
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
-        }
-    }
-    buildTypes {
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
-        }
-    }
-`;
-            content = content.replace('buildTypes {', signingConfig + '//');
-        }
-        await fs.writeFile(gradleKtsPath, content);
-    }
-}
-
-async function updateAppIcon(workingDir, iconPath) {
-    const resBase = path.join(workingDir, 'android/app/src/main/res');
-    const iconMap = [
-        { folder: 'mipmap-mdpi', size: 48 },
-        { folder: 'mipmap-hdpi', size: 72 },
-        { folder: 'mipmap-xhdpi', size: 96 },
-        { folder: 'mipmap-xxhdpi', size: 144 },
-        { folder: 'mipmap-xxxhdpi', size: 192 },
-    ];
-
-    for (const item of iconMap) {
-        const targetDir = path.join(resBase, item.folder);
-        await fs.ensureDir(targetDir);
-        await sharp(iconPath)
-            .resize(item.size, item.size)
-            .toFile(path.join(targetDir, 'ic_launcher.png'));
-            
-        // Also update round icon if it exists
-        const roundIconPath = path.join(targetDir, 'ic_launcher_round.png');
-        await sharp(iconPath)
-            .resize(item.size, item.size)
-            .composite([{
-                input: Buffer.from(`<svg><circle cx="${item.size / 2}" cy="${item.size / 2}" r="${item.size / 2}" fill="white"/></svg>`),
-                blend: 'dest-in'
-            }])
-            .toFile(roundIconPath);
+    // 3. Update strings.xml
+    const stringsPath = path.join(buildDir, 'android/app/src/main/res/values/strings.xml');
+    if (await fs.pathExists(stringsPath)) {
+        let strings = await fs.readFile(stringsPath, 'utf8');
+        strings = strings.replace(/<string name="app_name">[^<]*<\/string>/, `<string name="app_name">${appName}</string>`);
+        await fs.writeFile(stringsPath, strings);
     }
 }
 
