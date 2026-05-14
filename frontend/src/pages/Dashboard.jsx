@@ -6,9 +6,9 @@ const API_BASE = `https://backend.cloudedata.in/api`;
 
 const Dashboard = () => {
   const [formData, setFormData] = useState({
-    url: 'https://wapixo.com/app',
-    appName: 'Wapixo',
-    packageName: 'com.wapixo.app',
+    url: '',
+    appName: '',
+    packageName: '',
     splashColor: '#6366f1',
     versionName: '1.0.0',
     versionCode: '1',
