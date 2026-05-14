@@ -160,9 +160,15 @@ app.get('/api/status/:jobId', async (req, res) => {
         const build = await Build.findOne({ buildId: req.params.jobId });
         if (!build) return res.status(404).json({ error: 'Build not found' });
 
+        // Map database status to frontend expected states
+        let state = 'waiting';
+        if (build.status === 'processing') state = 'active';
+        else if (build.status === 'completed') state = 'completed';
+        else if (build.status === 'failed') state = 'failed';
+
         res.json({
             id: build.buildId,
-            state: build.status,
+            state: state, // frontend expects waiting/active/completed/failed
             progress: build.progress || 0,
             result: build.status === 'completed' ? {
                 apkUrl: build.apkUrl,
