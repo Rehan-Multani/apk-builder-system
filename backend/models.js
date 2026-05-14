@@ -24,6 +24,8 @@ const buildSchema = new mongoose.Schema({
     versionName: { type: String },
     versionCode: { type: String },
     status: { type: String, default: 'queued' },
+    progress: { type: Number, default: 0 },
+    error: { type: String },
     apkUrl: { type: String },
     aabUrl: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
