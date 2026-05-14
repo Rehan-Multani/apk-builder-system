@@ -23,7 +23,9 @@ async function buildAPK(data, onProgress) {
         await fs.copy(TEMPLATE_PATH, workingDir);
 
         // 3. Update config.json
-        const configPath = path.join(workingDir, 'assets/config.json');
+        const configDir = path.join(workingDir, 'assets');
+        await fs.ensureDir(configDir);
+        const configPath = path.join(configDir, 'config.json');
         await fs.writeJson(configPath, { url, splashColor }, { spaces: 2 });
 
         // 4. Update Package Name & App Name in Android files
