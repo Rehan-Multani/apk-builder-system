@@ -47,7 +47,7 @@ async function buildAPK(data, onProgress) {
         const targetPath = path.join(STORAGE_PATH, targetApkName);
 
         if (await fs.pathExists(sourceApk)) {
-            await fs.move(sourceApk, targetPath);
+            await fs.copy(sourceApk, targetPath);
         } else {
             throw new Error('APK not found after build');
         }

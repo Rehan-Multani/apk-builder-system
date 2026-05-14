@@ -15,6 +15,11 @@ const Dashboard = () => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  const handleAppNameChange = (name) => {
+    const pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.app`;
+    setFormData({ ...formData, appName: name, packageName: pkg });
+  };
+
   useEffect(() => {
     let interval;
     if (jobId && status?.state !== 'completed' && status?.state !== 'failed') {
@@ -80,7 +85,7 @@ const Dashboard = () => {
                       type="text" 
                       placeholder="My Store"
                       value={formData.appName}
-                      onChange={(e) => setFormData({...formData, appName: e.target.value})}
+                      onChange={(e) => handleAppNameChange(e.target.value)}
                       required
                     />
                   </div>

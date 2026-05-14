@@ -12,6 +12,12 @@ app.use('/apks', express.static(path.join(__dirname, '../apk_storage')));
 
 const PORT = process.env.PORT || 3000;
 
+// Helper to validate Android Package Name
+function isValidPackageName(packageName) {
+    const regex = /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)+$/;
+    return regex.test(packageName);
+}
+
 // Mock Database
 const db = {
     builds: [],
@@ -47,10 +53,16 @@ app.get('/api/builds', authenticate, (req, res) => {
 // Start Build
 app.post('/api/build', authenticate, async (req, res) => {
     try {
-        const { url, appName, packageName, splashColor, version } = req.body;
+        const { url, appName, packageName: rawPackageName, splashColor, version } = req.body;
 
         if (!url || !appName) {
             return res.status(400).json({ error: 'URL and App Name are required' });
+        }
+
+        const packageName = rawPackageName || `com.${appName.toLowerCase().replace(/\s+/g, '')}.app`;
+
+        if (!isValidPackageName(packageName)) {
+            return res.status(400).json({ error: 'Invalid package name format (e.g., com.company.app)' });
         }
 
         const buildId = uuidv4();
