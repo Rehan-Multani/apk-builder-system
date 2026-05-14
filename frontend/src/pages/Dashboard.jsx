@@ -6,9 +6,9 @@ const API_BASE = `http://${window.location.hostname}:3000/api`;
 
 const Dashboard = () => {
   const [formData, setFormData] = useState({
-    url: '',
-    appName: '',
-    packageName: '',
+    url: 'https://wapixo.com/app',
+    appName: 'Wapixo',
+    packageName: 'com.wapixo.app',
     splashColor: '#6366f1'
   });
   const [jobId, setJobId] = useState(null);
