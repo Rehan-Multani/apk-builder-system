@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Rocket, CheckCircle, Loader2, Download, ShieldCheck, Globe, Smartphone, Palette, Package } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = `http://${window.location.hostname}:3000/api`;
 
 const Dashboard = () => {
   const [formData, setFormData] = useState({

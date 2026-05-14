@@ -13,7 +13,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('http://localhost:3000/api/auth/login', { email, password });
+      const res = await axios.post(`http://${window.location.hostname}:3000/api/auth/login`, { email, password });
       onLogin(res.data.user);
     } catch (err) {
       setError('Invalid email or password');

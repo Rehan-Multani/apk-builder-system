@@ -12,7 +12,7 @@ const History = () => {
 
   const fetchHistory = async () => {
     try {
-      const res = await axios.get('http://localhost:3000/api/builds');
+      const res = await axios.get(`http://${window.location.hostname}:3000/api/builds`);
       setBuilds(res.data);
     } catch (err) {
       console.error('History fetch error:', err);
