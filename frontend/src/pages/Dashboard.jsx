@@ -431,14 +431,14 @@ const Dashboard = () => {
                     </div>
                     <div className="grid grid-cols-1 gap-3">
                       <a 
-                        href={status.result?.apkUrl} 
+                        href={`https://backend.cloudedata.in${status.result?.apkUrl}`} 
                         className="btn-primary !bg-green-600 hover:!bg-green-700 !py-2 !text-sm"
                         download
                       >
                         <Download size={16} /> Download APK (Install)
                       </a>
                       <a 
-                        href={status.result?.aabUrl} 
+                        href={`https://backend.cloudedata.in${status.result?.aabUrl}`} 
                         className="btn-secondary !border-green-500/30 !text-green-400 hover:!bg-green-500/10 !py-2 !text-sm"
                         download
                       >
