@@ -138,20 +138,16 @@ app.post('/api/build', authenticate, upload.fields([
         });
 
         // Add job to queue
-        const job = await buildQueue.add({
+        const job = await buildQueue.add('apk-build', {
             buildId,
             url,
             appName,
             packageName,
-            splashColor,
-            versionName,
-            versionCode,
-            privacyUrl,
-            splashDuration,
-            iconPath,
-            splashPath
+            splashColor: req.body.splashColor || '#6366f1',
+            splashMode: req.body.splashMode || 'color',
+            versionName: versionName || '1.0.0',
+            versionCode: versionCode || '1'
         }, { jobId: buildId });
-
         res.json({ message: 'Build queued', jobId: job.id, build: newBuild });
     } catch (err) {
         console.error(err);
