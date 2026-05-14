@@ -9,13 +9,20 @@ const Dashboard = () => {
     url: 'https://wapixo.com/app',
     appName: 'Wapixo',
     packageName: 'com.wapixo.app',
-    splashColor: '#6366f1'
+    splashColor: '#6366f1',
+    versionName: '1.0.0',
+    versionCode: '1',
+    privacyUrl: '',
+    splashDuration: '2', // Default 2 seconds
+    buildType: 'apk'
   });
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [icon, setIcon] = useState(null);
   const [iconPreview, setIconPreview] = useState(null);
+  const [splashImage, setSplashImage] = useState(null);
+  const [splashPreview, setSplashPreview] = useState(null);
 
   const handleAppNameChange = (name) => {
     const pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.app`;
@@ -27,6 +34,14 @@ const Dashboard = () => {
     if (file) {
       setIcon(file);
       setIconPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSplashChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSplashImage(file);
+      setSplashPreview(URL.createObjectURL(file));
     }
   };
 
@@ -54,7 +69,13 @@ const Dashboard = () => {
       data.append('appName', formData.appName);
       data.append('packageName', formData.packageName);
       data.append('splashColor', formData.splashColor);
+      data.append('versionName', formData.versionName);
+      data.append('versionCode', formData.versionCode);
+      data.append('privacyUrl', formData.privacyUrl);
+      data.append('splashDuration', formData.splashDuration);
+      data.append('buildType', formData.buildType);
       if (icon) data.append('icon', icon);
+      if (splashImage) data.append('splash', splashImage);
 
       const res = await axios.post(`${API_BASE}/build`, data, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -72,14 +93,14 @@ const Dashboard = () => {
     <div className="container py-8 animate-fade-in">
       <header className="text-center mb-12">
         <h1 className="text-4xl text-white">New Build Project</h1>
-        <p className="text-slate-400 mt-2">Enter your website details to generate a production-ready APK.</p>
+        <p className="text-slate-400 mt-2">Enter your website details to generate a production-ready APK or AAB.</p>
       </header>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Form Section */}
         <div className="lg:col-span-2 space-y-6">
           <div className="glass-card">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Row 1: URL & App Name */}
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
@@ -111,7 +132,8 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6">
+              {/* Row 2: Package Name, Splash Color & Duration */}
+              <div className="grid md:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
                     <Package size={16} /> Package Name
@@ -139,7 +161,7 @@ const Dashboard = () => {
                     <div className="input-group flex-1">
                       <input 
                         type="text" 
-                        className="font-mono uppercase"
+                        className="font-mono uppercase text-xs"
                         value={formData.splashColor}
                         onChange={(e) => setFormData({...formData, splashColor: e.target.value})}
                       />
@@ -148,19 +170,93 @@ const Dashboard = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    <Rocket size={16} /> App Icon (Optional)
+                    Splash Time (Sec)
+                  </label>
+                  <div className="input-group">
+                    <input 
+                      type="number" 
+                      min="1"
+                      max="10"
+                      value={formData.splashDuration}
+                      onChange={(e) => setFormData({...formData, splashDuration: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 3: Versioning & Privacy */}
+              <div className="grid md:grid-cols-3 gap-6 border-t border-slate-800 pt-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">Version Name</label>
+                  <div className="input-group">
+                    <input 
+                      type="text" 
+                      placeholder="1.0.0"
+                      value={formData.versionName}
+                      onChange={(e) => setFormData({...formData, versionName: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">Version Code</label>
+                  <div className="input-group">
+                    <input 
+                      type="number" 
+                      placeholder="1"
+                      value={formData.versionCode}
+                      onChange={(e) => setFormData({...formData, versionCode: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400">Privacy Policy URL</label>
+                  <div className="input-group">
+                    <input 
+                      type="url" 
+                      placeholder="https://..."
+                      value={formData.privacyUrl}
+                      onChange={(e) => setFormData({...formData, privacyUrl: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 4: Icon & Splash Upload */}
+              <div className="grid md:grid-cols-2 gap-6 border-t border-slate-800 pt-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                    <Rocket size={16} /> App Icon (512x512 PNG)
                   </label>
                   <div className="flex gap-4 items-center">
-                    <div className="h-20 w-20 rounded-2xl bg-slate-800 border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden">
+                    <div className="h-12 w-12 rounded-xl bg-slate-800 border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden">
                       {iconPreview ? (
                         <img src={iconPreview} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
-                        <Rocket size={24} className="text-slate-600" />
+                        <Rocket size={20} className="text-slate-600" />
                       )}
                     </div>
-                    <label className="btn-secondary cursor-pointer !py-2 !px-4">
-                      Choose Icon
+                    <label className="btn-secondary !py-1.5 !px-3 !text-xs cursor-pointer">
+                      Upload Logo
                       <input type="file" className="hidden" accept="image/*" onChange={handleIconChange} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                    <Palette size={16} /> Splash Image (Optional)
+                  </label>
+                  <div className="flex gap-4 items-center">
+                    <div className="h-12 w-12 rounded-xl bg-slate-800 border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden">
+                      {splashPreview ? (
+                        <img src={splashPreview} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <Palette size={20} className="text-slate-600" />
+                      )}
+                    </div>
+                    <label className="btn-secondary !py-1.5 !px-3 !text-xs cursor-pointer">
+                      Upload Splash
+                      <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} />
                     </label>
                   </div>
                 </div>
@@ -169,16 +265,15 @@ const Dashboard = () => {
               <button 
                 type="submit" 
                 disabled={loading || (jobId && status?.state !== 'completed' && status?.state !== 'failed')}
-                className="btn-primary mt-4"
+                className="btn-primary mt-4 w-full"
               >
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <Rocket size={20} />}
-                {jobId ? 'Building APK...' : 'Start Build Process'}
+                {jobId ? 'Building Bundle...' : 'Generate App Package'}
               </button>
             </form>
           </div>
         </div>
 
-        {/* Status Section */}
         <div className="space-y-6">
           <div className="glass-card h-full">
             <h3 className="font-bold text-white mb-6 flex items-center gap-2">
@@ -212,15 +307,24 @@ const Dashboard = () => {
                   <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl space-y-4">
                     <div className="flex items-center gap-2 text-green-500 font-bold text-sm">
                       <ShieldCheck size={18} />
-                      APK Build Successful
+                      Dual Build Successful
                     </div>
-                    <a 
-                      href={status.result?.apkUrl} 
-                      className="btn-primary !bg-green-600 hover:!bg-green-700"
-                      download
-                    >
-                      <Download size={18} /> Download APK
-                    </a>
+                    <div className="grid grid-cols-1 gap-3">
+                      <a 
+                        href={status.result?.apkUrl} 
+                        className="btn-primary !bg-green-600 hover:!bg-green-700 !py-2 !text-sm"
+                        download
+                      >
+                        <Download size={16} /> Download APK (Install)
+                      </a>
+                      <a 
+                        href={status.result?.aabUrl} 
+                        className="btn-secondary !border-green-500/30 !text-green-400 hover:!bg-green-500/10 !py-2 !text-sm"
+                        download
+                      >
+                        <Download size={16} /> Download AAB (Play Store)
+                      </a>
+                    </div>
                   </div>
                 )}
 

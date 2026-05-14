@@ -3,8 +3,8 @@ import axios from 'axios';
 import { Rocket, Lock, Mail, Loader2 } from 'lucide-react';
 
 const Login = ({ onLogin }) => {
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('admin@wapixo.com');
+  const [password, setPassword] = useState('adminpassword123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -13,10 +13,12 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post(`http://${window.location.hostname}:3000/api/auth/login`, { email, password });
+      const res = await axios.post(`http://${window.location.hostname}:3000/api/login`, { email, password });
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
       onLogin(res.data.user);
     } catch (err) {
-      setError('Invalid email or password');
+      setError(err.response?.data?.error || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
