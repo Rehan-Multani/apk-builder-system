@@ -13,7 +13,7 @@ const History = () => {
   const fetchHistory = async () => {
     const token = localStorage.getItem('token');
     try {
-      const res = await axios.get(`http://${window.location.hostname}:3000/api/history`, {
+      const res = await axios.get(`https://backend.cloudedata.in/api/history`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBuilds(res.data);

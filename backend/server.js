@@ -165,7 +165,7 @@ app.get('/api/status/:jobId', async (req, res) => {
     
     let result = null;
     if (job.returnvalue) {
-        const baseUrl = `http://${req.hostname}:${PORT}/apks`;
+        const baseUrl = `https://backend.cloudedata.in/apks`;
         result = {
             apkUrl: `${baseUrl}/${job.returnvalue.apkName}`,
             aabUrl: `${baseUrl}/${job.returnvalue.aabName}`,

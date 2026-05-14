@@ -13,7 +13,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post(`http://${window.location.hostname}:3000/api/login`, { email, password });
+      const res = await axios.post(`https://backend.cloudedata.in/api/login`, { email, password });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       onLogin(res.data.user);

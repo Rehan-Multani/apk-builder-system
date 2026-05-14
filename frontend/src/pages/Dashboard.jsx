@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Rocket, CheckCircle, Loader2, Download, ShieldCheck, Globe, Smartphone, Palette, Package } from 'lucide-react';
+import { Rocket, CheckCircle, Loader2, Download, ShieldCheck, Globe, Smartphone, Palette, Package, Trash2, X } from 'lucide-react';
 
-const API_BASE = `http://${window.location.hostname}:3000/api`;
+const API_BASE = `https://backend.cloudedata.in/api`;
 
 const Dashboard = () => {
   const [formData, setFormData] = useState({
@@ -221,47 +221,95 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Row 4: Icon & Splash Upload (Premium Design) */}
+              {/* Row 4: Icon & Splash Upload (Pro Design) */}
               <div className="grid md:grid-cols-2 gap-8 border-t border-slate-800 pt-8">
+                {/* App Icon Upload */}
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
                     <Rocket size={14} className="opacity-70" /> App Icon (512x512 PNG)
                   </label>
-                  <div className="flex items-center gap-4">
-                    <label className="flex-1 flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition-all cursor-pointer group">
-                      <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
-                        {iconPreview ? (
-                          <img src={iconPreview} alt="Preview" className="w-full h-full object-cover rounded-lg" />
-                        ) : (
-                          <Rocket size={20} />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-white">Upload Logo</p>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Click to select file</p>
-                      </div>
+                  <div 
+                    className="relative"
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500'); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500'); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type.startsWith('image/')) handleIconChange({ target: { files: [file] } });
+                    }}
+                  >
+                    <label className={`flex flex-col items-center justify-center p-6 bg-slate-900/30 border-2 border-dashed ${iconPreview ? 'border-indigo-500/50' : 'border-slate-800'} rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group min-h-[200px]`}>
+                      {iconPreview ? (
+                        <div className="relative w-40 h-40 mx-auto">
+                          <div className="w-full h-full rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-slate-900 flex items-center justify-center relative shadow-2xl">
+                            <img src={iconPreview} alt="Icon Preview" className="w-full h-full object-cover" />
+                            <button 
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setIcon(null); setIconPreview(null); }}
+                              className="absolute top-2 right-2 w-7 h-7 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all z-[100] border-2 border-white/30"
+                            >
+                              <X size={16} strokeWidth={3} />
+                            </button>
+                          </div>
+                          <p className="mt-2 text-[10px] font-bold text-indigo-400 flex items-center justify-center gap-1 uppercase tracking-widest">
+                            <CheckCircle size={10} /> Icon Ready
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <div className="h-16 w-16 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-500 mx-auto group-hover:bg-indigo-500 group-hover:text-white transition-all mb-4 shadow-inner">
+                            <Rocket size={32} />
+                          </div>
+                          <p className="text-sm font-bold text-white mb-1">Upload App Logo</p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">Drag & Drop or Click</p>
+                        </div>
+                      )}
                       <input type="file" className="hidden" accept="image/*" onChange={handleIconChange} />
                     </label>
                   </div>
                 </div>
 
+                {/* Splash Image Upload */}
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
                     <Palette size={14} className="opacity-70" /> Splash Image (Optional)
                   </label>
-                  <div className="flex items-center gap-4">
-                    <label className="flex-1 flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition-all cursor-pointer group">
-                      <div className="h-10 w-10 rounded-lg bg-slate-400/10 flex items-center justify-center text-slate-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
-                        {splashPreview ? (
-                          <img src={splashPreview} alt="Preview" className="w-full h-full object-cover rounded-lg" />
-                        ) : (
-                          <Palette size={20} />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-white">Upload Splash</p>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Click to select file</p>
-                      </div>
+                  <div 
+                    className="relative"
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500'); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500'); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type.startsWith('image/')) handleSplashChange({ target: { files: [file] } });
+                    }}
+                  >
+                    <label className={`flex flex-col items-center justify-center p-6 bg-slate-900/30 border-2 border-dashed ${splashPreview ? 'border-indigo-500/50' : 'border-slate-800'} rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group min-h-[220px]`}>
+                      {splashPreview ? (
+                        <div className="relative w-40 h-40 mx-auto">
+                          <div className="w-full h-full rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-slate-900 flex items-center justify-center relative shadow-2xl">
+                            <img src={splashPreview} alt="Splash Preview" className="w-full h-full object-cover" />
+                            <button 
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setSplashImage(null); setSplashPreview(null); }}
+                              className="absolute top-2 right-2 w-7 h-7 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all z-[100] border-2 border-white/30"
+                            >
+                              <X size={16} strokeWidth={3} />
+                            </button>
+                          </div>
+                          <p className="mt-2 text-[10px] font-bold text-indigo-400 flex items-center justify-center gap-1 uppercase tracking-widest">
+                            <CheckCircle size={10} /> Splash Ready
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6">
+                          <div className="h-16 w-16 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-500 mx-auto group-hover:bg-indigo-500 group-hover:text-white transition-all mb-4 shadow-inner">
+                            <Palette size={32} />
+                          </div>
+                          <p className="text-sm font-bold text-white mb-1">Upload Splash Image</p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">Drag & Drop or Click</p>
+                        </div>
+                      )}
                       <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} />
                     </label>
                   </div>
