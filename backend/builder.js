@@ -25,9 +25,9 @@ async function buildAPK(data, onProgress) {
         const configPath = path.join(workingDir, 'assets/config.json');
         await fs.writeJson(configPath, { url, splashColor }, { spaces: 2 });
 
-        // 4. Update Android Application ID and Name (Basic placeholder logic)
-        // In a real scenario, we'd use 'sed' or a library to replace strings in build.gradle
+        // 4. Update Package Name & App Name in Android files
         onProgress(30);
+        await updateAndroidConfig(workingDir, appName, packageName);
         
         // 5. Run Flutter Build
         console.log(`Running flutter build for ${buildId}...`);
@@ -62,6 +62,24 @@ async function buildAPK(data, onProgress) {
             await fs.remove(workingDir);
         }
         throw error;
+    }
+}
+
+async function updateAndroidConfig(workingDir, appName, packageName) {
+    // 1. Update app_name in strings.xml
+    const stringsPath = path.join(workingDir, 'android/app/src/main/res/values/strings.xml');
+    if (await fs.pathExists(stringsPath)) {
+        let stringsContent = await fs.readFile(stringsPath, 'utf8');
+        stringsContent = stringsContent.replace(/<string name="app_name">.*<\/string>/, `<string name="app_name">${appName}</string>`);
+        await fs.writeFile(stringsPath, stringsContent);
+    }
+
+    // 2. Update applicationId in build.gradle
+    const gradlePath = path.join(workingDir, 'android/app/build.gradle');
+    if (await fs.pathExists(gradlePath)) {
+        let gradleContent = await fs.readFile(gradlePath, 'utf8');
+        gradleContent = gradleContent.replace(/applicationId ".*"/, `applicationId "${packageName}"`);
+        await fs.writeFile(gradlePath, gradleContent);
     }
 }
 
