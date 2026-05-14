@@ -25,7 +25,7 @@ function getBuildEnv() {
  * Main function to build APK and AAB
  */
 async function buildAPK(data, updateStatus) {
-    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode } = data;
+    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName } = data;
     const baseDir = path.join(__dirname, '../');
     const templateDir = path.join(baseDir, 'template_app');
     const buildDir = path.join(baseDir, 'builds', buildId);
@@ -54,11 +54,17 @@ async function buildAPK(data, updateStatus) {
         updateStatus(30);
 
         // 3. Handle Icons and Splash Images
-        // (Assuming files are uploaded to temp folder by multer)
-        // For now, if we have specific icon/splash, we'd copy them to buildDir/assets/
+        if (iconPath && await fs.pathExists(iconPath)) {
+            await generateAppIcons(buildDir, iconPath);
+        }
+        
+        if (splashPath && await fs.pathExists(splashPath) && splashMode === 'image') {
+            const destSplash = path.join(buildDir, 'assets/splash.png');
+            await fs.copy(splashPath, destSplash);
+        }
 
         // 4. Update Android Configuration
-        await setupSigning(buildDir);
+        await setupSigning(buildDir, { storePassword, keyPassword, keyAlias });
         await updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode);
         updateStatus(50);
 
@@ -104,7 +110,9 @@ async function buildAPK(data, updateStatus) {
         
         const apkName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.apk`;
         const aabName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.aab`;
-        const jksName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.jks`;
+        
+        let jksName = keystoreName ? keystoreName : `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}`;
+        if (!jksName.endsWith('.jks')) jksName += '.jks';
 
         await fs.copy(apkSource, path.join(storageDir, apkName));
         await fs.copy(aabSource, path.join(storageDir, aabName));
@@ -179,22 +187,48 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
 /**
  * Sets up Android Signing (Keystore & key.properties)
  */
-async function setupSigning(buildDir) {
+async function setupSigning(buildDir, signingData) {
     const keyPath = path.join(buildDir, 'android/app/upload-keystore.jks');
     const propsPath = path.join(buildDir, 'android/key.properties');
     
-    const pass = 'rehan_password_2024';
+    const storePass = signingData.storePassword || 'rehan_password_2024';
+    const keyPass = signingData.keyPassword || 'rehan_password_2024';
+    const keyAlias = signingData.keyAlias || 'upload';
     
     // 1. Generate Keystore if doesn't exist
     if (!(await fs.pathExists(keyPath))) {
         console.log('Generating new keystore...');
-        const keygenCmd = `keytool -genkey -v -keystore "${keyPath}" -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass ${pass} -keypass ${pass} -dname "CN=Rehan, OU=Dev, O=Wapixo, L=Mumbai, S=MH, C=IN"`;
+        const keygenCmd = `keytool -genkey -v -keystore "${keyPath}" -keyalg RSA -keysize 2048 -validity 10000 -alias "${keyAlias}" -storepass "${storePass}" -keypass "${keyPass}" -dname "CN=Rehan, OU=Dev, O=Wapixo, L=Mumbai, S=MH, C=IN"`;
         await execPromise(keygenCmd);
     }
 
     // 2. Create key.properties
-    const propsContent = `storePassword=${pass}\nkeyPassword=${pass}\nkeyAlias=upload\nstoreFile=upload-keystore.jks`;
+    const propsContent = `storePassword=${storePass}\nkeyPassword=${keyPass}\nkeyAlias=${keyAlias}\nstoreFile=upload-keystore.jks`;
     await fs.writeFile(propsPath, propsContent);
+}
+
+/**
+ * Generates Android app icons in all required sizes using sharp
+ */
+async function generateAppIcons(buildDir, iconPath) {
+    const sharp = require('sharp');
+    const resDir = path.join(buildDir, 'android/app/src/main/res');
+    
+    const sizes = [
+        { name: 'mipmap-mdpi', size: 48 },
+        { name: 'mipmap-hdpi', size: 72 },
+        { name: 'mipmap-xhdpi', size: 96 },
+        { name: 'mipmap-xxhdpi', size: 144 },
+        { name: 'mipmap-xxxhdpi', size: 192 }
+    ];
+
+    for (const s of sizes) {
+        const dir = path.join(resDir, s.name);
+        await fs.ensureDir(dir);
+        await sharp(iconPath)
+            .resize(s.size, s.size)
+            .toFile(path.join(dir, 'ic_launcher.png'));
+    }
 }
 
 module.exports = { buildAPK };

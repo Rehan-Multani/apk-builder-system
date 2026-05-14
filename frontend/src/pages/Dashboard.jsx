@@ -13,9 +13,12 @@ const Dashboard = () => {
     splashMode: 'color', // 'color' or 'image'
     versionName: '1.0.0',
     versionCode: '1',
-    privacyUrl: '',
     splashDuration: '2', // Default 2 seconds
-    buildType: 'apk'
+    buildType: 'apk',
+    storePassword: '',
+    keyPassword: '',
+    keyAlias: '',
+    keystoreName: ''
   });
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
@@ -91,9 +94,12 @@ const Dashboard = () => {
       data.append('splashColor', formData.splashColor);
       data.append('versionName', formData.versionName);
       data.append('versionCode', formData.versionCode);
-      data.append('privacyUrl', formData.privacyUrl);
       data.append('splashDuration', formData.splashDuration);
       data.append('buildType', formData.buildType);
+      data.append('storePassword', formData.storePassword);
+      data.append('keyPassword', formData.keyPassword);
+      data.append('keyAlias', formData.keyAlias);
+      data.append('keystoreName', formData.keystoreName);
       if (icon) data.append('icon', icon);
       if (splashImage) data.append('splash', splashImage);
 
@@ -113,6 +119,13 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  const [isSplashOpen, setIsSplashOpen] = useState(false);
+
+  const splashOptions = [
+    { id: 'color', label: 'Solid Color Background', icon: <Palette size={16} />, desc: 'Branded color with logo' },
+    { id: 'image', label: 'Full Screen Image', icon: <Globe size={16} />, desc: 'Full screen splash artwork' }
+  ];
 
   return (
     <div className="container py-8 animate-fade-in">
@@ -172,33 +185,36 @@ const Dashboard = () => {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    <Palette size={16} /> Splash Mode
-                  </label>
-                  <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
-                    <button 
-                      type="button"
-                      onClick={() => setFormData({...formData, splashMode: 'color'})}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${formData.splashMode === 'color' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                        <Palette size={16} /> Splash Mode: <span className="text-white font-bold">{formData.splashMode === 'color' ? 'Color' : 'Image'}</span>
+                      </label>
+                      <p className="text-[10px] text-slate-500 mt-0.5">Switch to toggle between Solid Color or Full Image</p>
+                    </div>
+                    
+                    {/* iOS Style Gradient Toggle */}
+                    <div 
+                      onClick={() => setFormData({...formData, splashMode: formData.splashMode === 'color' ? 'image' : 'color'})}
+                      className={`relative w-16 h-8 rounded-full cursor-pointer transition-all duration-500 shadow-inner ${formData.splashMode === 'image' ? 'bg-gradient-to-r from-emerald-400 to-blue-500' : 'bg-slate-800'}`}
                     >
-                      Color
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setFormData({...formData, splashMode: 'image'})}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${formData.splashMode === 'image' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                      Image
-                    </button>
+                      {/* Knob */}
+                      <div 
+                        className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-500 shadow-xl flex items-center justify-center ${formData.splashMode === 'image' ? 'left-9' : 'left-1'}`}
+                      >
+                        <div className={`w-1.5 h-1.5 rounded-full ${formData.splashMode === 'image' ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                {/* Conditional Sections */}
+                <div className="animate-fade-in">
                   {formData.splashMode === 'color' ? (
-                    <>
-                      <label className="text-sm font-medium text-slate-400">Splash Background Color</label>
-                      <div className="flex gap-3">
+                    <div className="space-y-2 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 animate-slide-up">
+                      <label className="text-xs font-bold text-indigo-400 uppercase tracking-widest block">Splash Background Color</label>
+                      <div className="flex gap-3 mt-2">
                         <input 
                           type="color" 
                           className="h-11 w-16 bg-slate-900 border-none rounded-lg cursor-pointer p-0"
@@ -214,19 +230,61 @@ const Dashboard = () => {
                           />
                         </div>
                       </div>
-                    </>
+                      <p className="text-[10px] text-slate-500 italic mt-2">* Your app icon will be centered on this color background.</p>
+                    </div>
                   ) : (
-                    <>
-                      <label className="text-sm font-medium text-slate-400">Splash Duration (Sec)</label>
-                      <div className="input-group">
-                        <input 
-                          type="number" 
-                          min="1" max="10"
-                          value={formData.splashDuration}
-                          onChange={(e) => setFormData({...formData, splashDuration: e.target.value})}
-                        />
+                    <div className="space-y-4 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 animate-slide-up">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Display Duration (Seconds)</label>
+                        <div className="input-group w-24">
+                          <input 
+                            type="number" 
+                            min="1" max="10"
+                            value={formData.splashDuration}
+                            onChange={(e) => setFormData({...formData, splashDuration: e.target.value})}
+                          />
+                        </div>
                       </div>
-                    </>
+
+                      {/* Splash Image Upload moved here */}
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Splash Image (Full Screen)</label>
+                        <div 
+                          className="relative"
+                          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500'); }}
+                          onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500'); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const file = e.dataTransfer.files[0];
+                            if (file && file.type.startsWith('image/')) handleSplashChange({ target: { files: [file] } });
+                          }}
+                        >
+                          <label className={`flex flex-col items-center justify-center p-6 bg-slate-900/40 border-2 border-dashed ${splashPreview ? 'border-indigo-500/50' : 'border-slate-800'} rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group min-h-[180px]`}>
+                            {splashPreview ? (
+                              <div className="relative w-32 h-32 mx-auto">
+                                <div className="w-full h-full rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-slate-900 flex items-center justify-center relative shadow-2xl">
+                                  <img src={splashPreview} alt="Splash Preview" className="w-full h-full object-cover" />
+                                  <button 
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); setSplashImage(null); setSplashPreview(null); }}
+                                    className="absolute top-1 right-1 w-6 h-6 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all z-[100]"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-2">
+                                <Palette size={24} className="text-slate-500 mx-auto mb-2 group-hover:text-indigo-400" />
+                                <p className="text-xs font-bold text-white">Upload Splash Image</p>
+                                <p className="text-[10px] text-slate-500 uppercase mt-1">PNG/JPG Supported</p>
+                              </div>
+                            )}
+                            <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -255,21 +313,10 @@ const Dashboard = () => {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400">Privacy Policy URL</label>
-                  <div className="input-group">
-                    <input 
-                      type="url" 
-                      placeholder="https://..."
-                      value={formData.privacyUrl}
-                      onChange={(e) => setFormData({...formData, privacyUrl: e.target.value})}
-                    />
-                  </div>
-                </div>
               </div>
 
-              {/* Row 4: Icon & Splash Upload (Pro Design) */}
-              <div className="grid md:grid-cols-2 gap-8 border-t border-slate-800 pt-8">
+              {/* Row 4: Icon Upload (Simplified) */}
+              <div className="grid md:grid-cols-1 border-t border-slate-800 pt-8">
                 {/* App Icon Upload */}
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
@@ -285,83 +332,83 @@ const Dashboard = () => {
                       if (file && file.type.startsWith('image/')) handleIconChange({ target: { files: [file] } });
                     }}
                   >
-                    <label className={`flex flex-col items-center justify-center p-6 bg-slate-900/30 border-2 border-dashed ${iconPreview ? 'border-indigo-500/50' : 'border-slate-800'} rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group min-h-[200px]`}>
+                    <label className={`flex flex-col items-center justify-center p-6 bg-slate-900/30 border-2 border-dashed ${iconPreview ? 'border-indigo-500/50' : 'border-slate-800'} rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group min-h-[160px]`}>
                       {iconPreview ? (
-                        <div className="relative w-40 h-40 mx-auto">
+                        <div className="relative w-32 h-32 mx-auto">
                           <div className="w-full h-full rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-slate-900 flex items-center justify-center relative shadow-2xl">
                             <img src={iconPreview} alt="Icon Preview" className="w-full h-full object-cover" />
                             <button 
                               type="button"
                               onClick={(e) => { e.preventDefault(); setIcon(null); setIconPreview(null); }}
-                              className="absolute top-2 right-2 w-7 h-7 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all z-[100] border-2 border-white/30"
+                              className="absolute top-1 right-1 w-6 h-6 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all z-[100]"
                             >
-                              <X size={16} strokeWidth={3} />
+                              <X size={14} />
                             </button>
                           </div>
-                          <p className="mt-2 text-[10px] font-bold text-indigo-400 flex items-center justify-center gap-1 uppercase tracking-widest">
-                            <CheckCircle size={10} /> Icon Ready
-                          </p>
                         </div>
                       ) : (
-                        <div className="text-center py-6">
-                          <div className="h-16 w-16 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-500 mx-auto group-hover:bg-indigo-500 group-hover:text-white transition-all mb-4 shadow-inner">
-                            <Rocket size={32} />
-                          </div>
-                          <p className="text-sm font-bold text-white mb-1">Upload App Logo</p>
-                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">Drag & Drop or Click</p>
+                        <div className="text-center py-2">
+                          <Rocket size={24} className="text-slate-500 mx-auto mb-2 group-hover:text-indigo-400" />
+                          <p className="text-sm font-bold text-white">Upload App Logo</p>
+                          <p className="text-[10px] text-slate-500 uppercase mt-1">PNG Required</p>
                         </div>
                       )}
                       <input type="file" className="hidden" accept="image/*" onChange={handleIconChange} />
                     </label>
                   </div>
                 </div>
+              </div>
 
-                {/* Splash Image Upload */}
-                <div className={`space-y-3 transition-all duration-500 ${formData.splashMode === 'image' ? 'opacity-100 scale-100' : 'opacity-20 grayscale pointer-events-none'}`}>
-                  <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
-                    <Palette size={14} className="opacity-70" /> {formData.splashMode === 'image' ? 'Splash Image (Required)' : 'Splash Image (Disabled)'}
-                  </label>
-                  <div 
-                    className="relative"
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-indigo-500'); }}
-                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-indigo-500'); }}
-                    onDrop={(e) => {
-                      if (formData.splashMode !== 'image') return;
-                      e.preventDefault();
-                      const file = e.dataTransfer.files[0];
-                      if (file && file.type.startsWith('image/')) handleSplashChange({ target: { files: [file] } });
-                    }}
-                  >
-                    <label className={`flex flex-col items-center justify-center p-6 bg-slate-900/30 border-2 border-dashed ${splashPreview ? 'border-indigo-500/50' : 'border-slate-800'} rounded-2xl hover:border-indigo-500/50 transition-all cursor-pointer group min-h-[220px]`}>
-                      {splashPreview ? (
-                        <div className="relative w-40 h-40 mx-auto">
-                          <div className="w-full h-full rounded-2xl overflow-hidden border-2 border-indigo-500/50 bg-slate-900 flex items-center justify-center relative shadow-2xl">
-                            <img src={splashPreview} alt="Splash Preview" className="w-full h-full object-cover" />
-                            <button 
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); setSplashImage(null); setSplashPreview(null); }}
-                              className="absolute top-2 right-2 w-7 h-7 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all z-[100] border-2 border-white/30"
-                            >
-                              <X size={16} strokeWidth={3} />
-                            </button>
-                          </div>
-                          <p className="mt-2 text-[10px] font-bold text-indigo-400 flex items-center justify-center gap-1 uppercase tracking-widest">
-                            <CheckCircle size={10} /> Splash Ready
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-center py-6">
-                          <div className="h-16 w-16 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-500 mx-auto group-hover:bg-indigo-500 group-hover:text-white transition-all mb-4 shadow-inner">
-                            <Palette size={32} />
-                          </div>
-                          <p className="text-sm font-bold text-white mb-1">Upload Splash Image</p>
-                          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium">
-                            {formData.splashMode === 'image' ? 'Drag & Drop or Click' : 'Switch to Image Mode to upload'}
-                          </p>
-                        </div>
-                      )}
-                      <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} disabled={formData.splashMode !== 'image'} />
-                    </label>
+              {/* Row 5: Advanced Android Signing */}
+              <div className="space-y-4 border-t border-slate-800 pt-8">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="text-indigo-500" size={18} />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Advanced Android Signing (Optional)</h3>
+                </div>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Store Password</label>
+                    <div className="input-group">
+                      <input 
+                        type="password" 
+                        placeholder="Leave blank for default"
+                        value={formData.storePassword}
+                        onChange={(e) => setFormData({...formData, storePassword: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Key Password</label>
+                    <div className="input-group">
+                      <input 
+                        type="password" 
+                        placeholder="Leave blank for default"
+                        value={formData.keyPassword}
+                        onChange={(e) => setFormData({...formData, keyPassword: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Key Alias</label>
+                    <div className="input-group">
+                      <input 
+                        type="text" 
+                        placeholder="Default: upload"
+                        value={formData.keyAlias}
+                        onChange={(e) => setFormData({...formData, keyAlias: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Keystore File Name</label>
+                    <div className="input-group">
+                      <input 
+                        type="text" 
+                        placeholder="Default: app_name.jks"
+                        value={formData.keystoreName}
+                        onChange={(e) => setFormData({...formData, keystoreName: e.target.value})}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

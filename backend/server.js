@@ -110,7 +110,7 @@ app.post('/api/build', authenticate, upload.fields([
     { name: 'splash', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { url, appName, packageName: rawPackageName, splashColor, versionName, versionCode, privacyUrl, splashDuration } = req.body;
+        const { url, appName, packageName: rawPackageName, splashColor, versionName, versionCode, splashDuration, storePassword, keyPassword, keyAlias, keystoreName } = req.body;
         const iconPath = req.files['icon'] ? req.files['icon'][0].path : null;
         const splashPath = req.files['splash'] ? req.files['splash'][0].path : null;
 
@@ -146,7 +146,13 @@ app.post('/api/build', authenticate, upload.fields([
             splashColor: req.body.splashColor || '#6366f1',
             splashMode: req.body.splashMode || 'color',
             versionName: versionName || '1.0.0',
-            versionCode: versionCode || '1'
+            versionCode: versionCode || '1',
+            iconPath,
+            splashPath,
+            storePassword,
+            keyPassword,
+            keyAlias,
+            keystoreName
         }, { jobId: buildId });
         res.json({ message: 'Build queued', jobId: job.id, build: newBuild });
     } catch (err) {
