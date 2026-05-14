@@ -41,13 +41,15 @@ async function buildAPK(data, updateStatus) {
         // For now, if we have specific icon/splash, we'd copy them to buildDir/assets/
 
         // 4. Update Android Configuration
+        await setupSigning(buildDir);
         await updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode);
         updateStatus(50);
 
         // 5. Run Flutter Build
         console.log(`[${buildId}] Running Flutter build...`);
-        const buildCmd = `flutter build apk --release --no-tree-shake-icons`;
-        const aabCmd = `flutter build appbundle --release --no-tree-shake-icons`;
+        // Using --no-daemon to save RAM on VPS
+        const buildCmd = `flutter build apk --release --no-tree-shake-icons --no-pub`;
+        const aabCmd = `flutter build appbundle --release --no-tree-shake-icons --no-pub`;
 
         // Execute APK Build
         await execPromise(buildCmd, { 
@@ -110,23 +112,50 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
     const gradlePath = path.join(buildDir, 'android/app/build.gradle');
     if (await fs.pathExists(gradlePath)) {
         let gradle = await fs.readFile(gradlePath, 'utf8');
-        // Update namespace (Modern Gradle)
         gradle = gradle.replace(/namespace\s*=\s*"[^"]*"/, `namespace = "${packageName}"`);
-        // Update applicationId
         gradle = gradle.replace(/applicationId\s*=\s*"[^"]*"/, `applicationId = "${packageName}"`);
-        // Update Version
         gradle = gradle.replace(/versionName\s*"[^"]*"/, `versionName "${versionName || '1.0.0'}"`);
         gradle = gradle.replace(/versionCode\s*\d+/, `versionCode ${versionCode || '1'}`);
         await fs.writeFile(gradlePath, gradle);
     }
 
-    // 3. Update strings.xml
+    // 3. Force Memory Limit in gradle.properties
+    const propsPath = path.join(buildDir, 'android/gradle.properties');
+    const memoryConfig = '\norg.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=256m -XX:+HeapDumpOnOutOfMemoryError\norg.gradle.daemon=false\n';
+    if (await fs.pathExists(propsPath)) {
+        await fs.appendFile(propsPath, memoryConfig);
+    } else {
+        await fs.writeFile(propsPath, memoryConfig);
+    }
+
+    // 4. Update strings.xml
     const stringsPath = path.join(buildDir, 'android/app/src/main/res/values/strings.xml');
     if (await fs.pathExists(stringsPath)) {
         let strings = await fs.readFile(stringsPath, 'utf8');
         strings = strings.replace(/<string name="app_name">[^<]*<\/string>/, `<string name="app_name">${appName}</string>`);
         await fs.writeFile(stringsPath, strings);
     }
+}
+
+/**
+ * Sets up Android Signing (Keystore & key.properties)
+ */
+async function setupSigning(buildDir) {
+    const keyPath = path.join(buildDir, 'android/app/upload-keystore.jks');
+    const propsPath = path.join(buildDir, 'android/key.properties');
+    
+    const pass = 'rehan_password_2024';
+    
+    // 1. Generate Keystore if doesn't exist
+    if (!(await fs.pathExists(keyPath))) {
+        console.log('Generating new keystore...');
+        const keygenCmd = `keytool -genkey -v -keystore "${keyPath}" -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass ${pass} -keypass ${pass} -dname "CN=Rehan, OU=Dev, O=Wapixo, L=Mumbai, S=MH, C=IN"`;
+        await execPromise(keygenCmd);
+    }
+
+    // 2. Create key.properties
+    const propsContent = `storePassword=${pass}\nkeyPassword=${pass}\nkeyAlias=upload\nstoreFile=upload-keystore.jks`;
+    await fs.writeFile(propsPath, propsContent);
 }
 
 module.exports = { buildAPK };
