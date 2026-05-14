@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { exec } = require('child_process');
 const util = require('util');
+const sharp = require('sharp');
 const execPromise = util.promisify(exec);
 
 const TEMPLATE_PATH = path.join(__dirname, '../template_app');
@@ -9,7 +10,7 @@ const BUILDS_PATH = path.join(__dirname, '../builds');
 const STORAGE_PATH = path.join(__dirname, '../apk_storage');
 
 async function buildAPK(data, onProgress) {
-    const { buildId, url, appName, packageName, splashColor } = data;
+    const { buildId, url, appName, packageName, splashColor, iconPath } = data;
     if (!buildId) throw new Error('buildId is required but was undefined');
     const workingDir = path.join(BUILDS_PATH, buildId);
 
@@ -31,6 +32,12 @@ async function buildAPK(data, onProgress) {
         // 4. Update Package Name & App Name in Android files
         onProgress(30);
         await updateAndroidConfig(workingDir, appName, packageName);
+
+        // 4.1 Update App Icon if provided
+        if (iconPath && await fs.pathExists(iconPath)) {
+            console.log(`[${buildId}] Updating App Icon...`);
+            await updateAppIcon(workingDir, iconPath);
+        }
         
         // 5. Run Flutter Build
         console.log(`[${buildId}] Running: flutter build apk --release --no-tree-shake-icons`);
@@ -92,6 +99,35 @@ async function updateAndroidConfig(workingDir, appName, packageName) {
         let gradleContent = await fs.readFile(gradlePath, 'utf8');
         gradleContent = gradleContent.replace(/applicationId ".*"/, `applicationId "${packageName}"`);
         await fs.writeFile(gradlePath, gradleContent);
+    }
+}
+
+async function updateAppIcon(workingDir, iconPath) {
+    const resBase = path.join(workingDir, 'android/app/src/main/res');
+    const iconMap = [
+        { folder: 'mipmap-mdpi', size: 48 },
+        { folder: 'mipmap-hdpi', size: 72 },
+        { folder: 'mipmap-xhdpi', size: 96 },
+        { folder: 'mipmap-xxhdpi', size: 144 },
+        { folder: 'mipmap-xxxhdpi', size: 192 },
+    ];
+
+    for (const item of iconMap) {
+        const targetDir = path.join(resBase, item.folder);
+        await fs.ensureDir(targetDir);
+        await sharp(iconPath)
+            .resize(item.size, item.size)
+            .toFile(path.join(targetDir, 'ic_launcher.png'));
+            
+        // Also update round icon if it exists
+        const roundIconPath = path.join(targetDir, 'ic_launcher_round.png');
+        await sharp(iconPath)
+            .resize(item.size, item.size)
+            .composite([{
+                input: Buffer.from(`<svg><circle cx="${item.size / 2}" cy="${item.size / 2}" r="${item.size / 2}" fill="white"/></svg>`),
+                blend: 'dest-in'
+            }])
+            .toFile(roundIconPath);
     }
 }
 

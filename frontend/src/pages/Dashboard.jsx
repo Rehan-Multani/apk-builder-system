@@ -14,10 +14,20 @@ const Dashboard = () => {
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [icon, setIcon] = useState(null);
+  const [iconPreview, setIconPreview] = useState(null);
 
   const handleAppNameChange = (name) => {
     const pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.app`;
     setFormData({ ...formData, appName: name, packageName: pkg });
+  };
+
+  const handleIconChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setIcon(file);
+      setIconPreview(URL.createObjectURL(file));
+    }
   };
 
   useEffect(() => {
@@ -39,7 +49,16 @@ const Dashboard = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/build`, formData);
+      const data = new FormData();
+      data.append('url', formData.url);
+      data.append('appName', formData.appName);
+      data.append('packageName', formData.packageName);
+      data.append('splashColor', formData.splashColor);
+      if (icon) data.append('icon', icon);
+
+      const res = await axios.post(`${API_BASE}/build`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       setJobId(res.data.jobId);
       setStatus({ state: 'waiting', progress: 0 });
     } catch (err) {
@@ -125,6 +144,24 @@ const Dashboard = () => {
                         onChange={(e) => setFormData({...formData, splashColor: e.target.value})}
                       />
                     </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                    <Rocket size={16} /> App Icon (Optional)
+                  </label>
+                  <div className="flex gap-4 items-center">
+                    <div className="h-20 w-20 rounded-2xl bg-slate-800 border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden">
+                      {iconPreview ? (
+                        <img src={iconPreview} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <Rocket size={24} className="text-slate-600" />
+                      )}
+                    </div>
+                    <label className="btn-secondary cursor-pointer !py-2 !px-4">
+                      Choose Icon
+                      <input type="file" className="hidden" accept="image/*" onChange={handleIconChange} />
+                    </label>
                   </div>
                 </div>
               </div>

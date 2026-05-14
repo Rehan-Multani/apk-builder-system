@@ -3,6 +3,7 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs-extra');
+const multer = require('multer');
 const { buildQueue } = require('./queue');
 
 const app = express();
@@ -25,6 +26,19 @@ const db = {
         { id: 1, email: 'admin@example.com', password: 'password123' }
     ]
 };
+
+// Multer Setup for Icons
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, 'uploads/icons');
+        fs.ensureDirSync(dir);
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+const upload = multer({ storage });
 
 // Auth Middleware (Mock)
 const authenticate = (req, res, next) => {
@@ -50,10 +64,11 @@ app.get('/api/builds', authenticate, (req, res) => {
     res.json(db.builds);
 });
 
-// Start Build
-app.post('/api/build', authenticate, async (req, res) => {
+// Start Build (Updated for Icon Upload)
+app.post('/api/build', authenticate, upload.single('icon'), async (req, res) => {
     try {
         const { url, appName, packageName: rawPackageName, splashColor, version } = req.body;
+        const iconPath = req.file ? req.file.path : null;
 
         if (!url || !appName) {
             return res.status(400).json({ error: 'URL and App Name are required' });
@@ -76,6 +91,7 @@ app.post('/api/build', authenticate, async (req, res) => {
             splashColor: splashColor || '#ffffff',
             version: version || '1.0.0',
             status: 'queued',
+            iconPath,
             createdAt: new Date(),
         };
 
