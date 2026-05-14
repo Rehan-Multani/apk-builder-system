@@ -156,30 +156,23 @@ app.post('/api/build', authenticate, upload.fields([
 });
 
 app.get('/api/status/:jobId', async (req, res) => {
-    const job = await buildQueue.getJob(req.params.jobId);
-    if (!job) return res.status(404).json({ error: 'Job not found' });
+    try {
+        const build = await Build.findOne({ buildId: req.params.jobId });
+        if (!build) return res.status(404).json({ error: 'Build not found' });
 
-    const state = await job.getState();
-    const progress = job.progress();
-    
-    let result = null;
-    if (job.returnvalue) {
-        const baseUrl = `https://backend.cloudedata.in/apks`;
-        result = {
-            apkUrl: `${baseUrl}/${job.returnvalue.apkName}`,
-            aabUrl: `${baseUrl}/${job.returnvalue.aabName}`,
-        };
-        
-        // Update MongoDB build status
-        await Build.findOneAndUpdate(
-            { buildId: job.id },
-            { status: 'completed', apkUrl: result.apkUrl, aabUrl: result.aabUrl }
-        );
-    } else if (state === 'failed') {
-        await Build.findOneAndUpdate({ buildId: job.id }, { status: 'failed' });
+        res.json({
+            id: build.buildId,
+            state: build.status,
+            progress: build.progress || 0,
+            result: build.status === 'completed' ? {
+                apkUrl: build.apkUrl,
+                aabUrl: build.aabUrl
+            } : null,
+            error: build.error
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch status' });
     }
-
-    res.json({ id: job.id, state, progress, result });
 });
 
 app.listen(PORT, () => {

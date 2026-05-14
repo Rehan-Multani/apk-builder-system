@@ -68,12 +68,19 @@ async function buildAPK(data, updateStatus) {
         // 6. Copy results to storage
         const apkSource = path.join(buildDir, 'build/app/outputs/flutter-apk/app-release.apk');
         const aabSource = path.join(buildDir, 'build/app/outputs/bundle/release/app-release.aab');
+        const jksSource = path.join(buildDir, 'android/app/upload-keystore.jks');
         
         const apkName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.apk`;
         const aabName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.aab`;
+        const jksName = `${appName.replace(/\s+/g, '_')}_${buildId.substring(0, 8)}.jks`;
 
         await fs.copy(apkSource, path.join(storageDir, apkName));
         await fs.copy(aabSource, path.join(storageDir, aabName));
+        
+        // Backup Keystore (Very Important for updates!)
+        const keystoreBackupDir = path.join(baseDir, 'keystore_backups');
+        await fs.ensureDir(keystoreBackupDir);
+        await fs.copy(jksSource, path.join(keystoreBackupDir, jksName));
 
         // 7. Cleanup build folder
         await fs.remove(buildDir);
