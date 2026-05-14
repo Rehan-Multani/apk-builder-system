@@ -3,8 +3,8 @@ import axios from 'axios';
 import { Rocket, Lock, Mail, Loader2 } from 'lucide-react';
 
 const Login = ({ onLogin }) => {
-  const [email, setEmail] = useState('admin@wapixo.com');
-  const [password, setPassword] = useState('adminpassword123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Rocket, CheckCircle, Loader2, Download, ShieldCheck, Globe, Smartphone, Palette, Package, Trash2, X } from 'lucide-react';
+import { 
+  Rocket, ShieldCheck, Globe, Palette, Clock, CheckCircle, 
+  Download, Loader2, Play, Info, Smartphone, AlertCircle, X, Settings 
+} from 'lucide-react';
 
 const API_BASE = `https://backend.cloudedata.in/api`;
 
@@ -127,11 +130,45 @@ const Dashboard = () => {
     { id: 'image', label: 'Full Screen Image', icon: <Globe size={16} />, desc: 'Full screen splash artwork' }
   ];
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [passData, setPassData] = useState({ current: '', new: '', confirm: '' });
+  const [passLoading, setPassLoading] = useState(false);
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (passData.new !== passData.confirm) return alert('Passwords do not match');
+    setPassLoading(true);
+    try {
+      const user = JSON.parse(localStorage.getItem('user'));
+      await axios.post(`${API_BASE.replace('/build', '')}/change-password`, {
+        userId: user._id,
+        currentPassword: passData.current,
+        newPassword: passData.new
+      });
+      alert('Password updated successfully');
+      setShowSettings(false);
+      setPassData({ current: '', new: '', confirm: '' });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update password');
+    } finally {
+      setPassLoading(false);
+    }
+  };
+
   return (
-    <div className="container py-8 animate-fade-in">
-      <header className="text-center mb-12">
-        <h1 className="text-4xl text-white">New Build Project</h1>
-        <p className="text-slate-400 mt-2">Enter your website details to generate a production-ready APK or AAB.</p>
+    <div className="container py-8 animate-fade-in relative">
+      <header className="flex justify-between items-start mb-12">
+        <div className="text-left">
+          <h1 className="text-4xl text-white">New Build Project</h1>
+          <p className="text-slate-400 mt-2">Enter your website details to generate a production-ready APK or AAB.</p>
+        </div>
+        <button 
+          onClick={() => setShowSettings(true)}
+          className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all shadow-lg"
+          title="Change Password"
+        >
+          <Settings size={24} />
+        </button>
       </header>
 
       <div className="grid lg:grid-cols-3 gap-8">
@@ -506,6 +543,65 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+      {/* Change Password Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
+          <div className="glass-card w-full max-w-md relative z-10 animate-slide-up border-indigo-500/30">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-2 text-white font-bold text-xl uppercase tracking-wider">
+                <Settings className="text-indigo-500" size={24} /> Settings
+              </div>
+              <button onClick={() => setShowSettings(false)} className="text-slate-500 hover:text-white transition-all">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Current Password</label>
+                <div className="input-group">
+                  <input 
+                    type="password" 
+                    required
+                    value={passData.current}
+                    onChange={(e) => setPassData({...passData, current: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">New Password</label>
+                <div className="input-group">
+                  <input 
+                    type="password" 
+                    required
+                    value={passData.new}
+                    onChange={(e) => setPassData({...passData, new: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Confirm New Password</label>
+                <div className="input-group">
+                  <input 
+                    type="password" 
+                    required
+                    value={passData.confirm}
+                    onChange={(e) => setPassData({...passData, confirm: e.target.value})}
+                  />
+                </div>
+              </div>
+              <button 
+                type="submit" 
+                disabled={passLoading}
+                className="btn-primary w-full mt-4"
+              >
+                {passLoading ? <Loader2 className="animate-spin" size={20} /> : 'Update Password'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
