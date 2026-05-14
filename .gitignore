@@ -1,13 +1,34 @@
+# Node.js
 node_modules/
-builds/
-apk_storage/
-.env
-*.apk
-dist/
+npm-debug.log
+yarn-error.log
+
+# Build outputs
 build/
+dist/
+output/
+apk_storage/
+builds/
+cache/
+
+# Android
+.gradle/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Flutter
 .dart_tool/
 .packages
 .pub/
 .pub-cache/
 pubspec.lock
-D:\Github\apk-builder-system\template_app\android\app\src\main\AndroidManifest.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
