@@ -51,20 +51,20 @@ async function buildAPK(data, updateStatus) {
         
         const runBuild = (cmd, args, step) => {
             return new Promise((resolve, reject) => {
-                const process = spawn(cmd, args, { 
+                const child = spawn(cmd, args, { 
                     cwd: buildDir,
                     env: { ...process.env, HOME: '/root', USER: 'root' }
                 });
 
-                process.stdout.on('data', (data) => {
+                child.stdout.on('data', (data) => {
                     console.log(`[${buildId}] STDOUT: ${data}`);
                 });
 
-                process.stderr.on('data', (data) => {
+                child.stderr.on('data', (data) => {
                     console.error(`[${buildId}] STDERR: ${data}`);
                 });
 
-                process.on('close', (code) => {
+                child.on('close', (code) => {
                     if (code === 0) resolve();
                     else reject(new Error(`${cmd} failed with code ${code}`));
                 });
