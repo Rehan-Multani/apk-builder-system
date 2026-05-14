@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   Rocket, ShieldCheck, Globe, Palette, Clock, CheckCircle, 
-  Download, Loader2, Play, Info, Smartphone, AlertCircle, X, Settings 
+  Download, Loader2, Play, Info, Smartphone, AlertCircle, X, Settings, Package 
 } from 'lucide-react';
 
 const API_BASE = `https://backend.cloudedata.in/api`;
@@ -61,7 +61,7 @@ const Dashboard = () => {
       interval = setInterval(async () => {
         try {
           const res = await axios.get(`${API_BASE}/status/${jobId}`);
-          setStatus(res.data);
+          if (res.data) setStatus(res.data);
         } catch (err) {
           console.error('Status fetch error:', err);
         }
