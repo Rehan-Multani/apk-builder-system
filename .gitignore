@@ -1,0 +1,12 @@
+node_modules/
+builds/
+apk_storage/
+.env
+*.apk
+dist/
+build/
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+pubspec.lock
