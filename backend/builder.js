@@ -47,23 +47,39 @@ async function buildAPK(data, updateStatus) {
 
         // 5. Run Flutter Build
         console.log(`[${buildId}] Running Flutter build...`);
-        // Using --no-daemon to save RAM on VPS
-        const buildCmd = `flutter build apk --release --no-tree-shake-icons --no-pub`;
-        const aabCmd = `flutter build appbundle --release --no-tree-shake-icons --no-pub`;
+        const { spawn } = require('child_process');
+        
+        const runBuild = (cmd, args, step) => {
+            return new Promise((resolve, reject) => {
+                const process = spawn(cmd, args, { 
+                    cwd: buildDir,
+                    env: { ...process.env, HOME: '/root', USER: 'root' }
+                });
 
-        // Execute APK Build
-        await execPromise(buildCmd, { 
-            cwd: buildDir,
-            env: { ...process.env, HOME: '/root', USER: 'root' } 
-        });
+                process.stdout.on('data', (data) => {
+                    console.log(`[${buildId}] STDOUT: ${data}`);
+                });
+
+                process.stderr.on('data', (data) => {
+                    console.error(`[${buildId}] STDERR: ${data}`);
+                });
+
+                process.on('close', (code) => {
+                    if (code === 0) resolve();
+                    else reject(new Error(`${cmd} failed with code ${code}`));
+                });
+            });
+        };
+
+        // APK Build
+        updateStatus(60);
+        await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons', '--no-pub']);
+        
         updateStatus(80);
-
-        // Execute AAB Build
-        await execPromise(aabCmd, { 
-            cwd: buildDir,
-            env: { ...process.env, HOME: '/root', USER: 'root' } 
-        });
-        updateStatus(90);
+        // AAB Build
+        await runBuild('flutter', ['build', 'appbundle', '--release', '--no-tree-shake-icons', '--no-pub']);
+        
+        updateStatus(95);
 
         // 6. Copy results to storage
         const apkSource = path.join(buildDir, 'build/app/outputs/flutter-apk/app-release.apk');
