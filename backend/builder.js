@@ -1,8 +1,25 @@
 const path = require('path');
 const fs = require('fs-extra');
-const { exec } = require('child_process');
+const os = require('os');
+const { exec, spawn } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+
+/**
+ * Gets a clean environment for the build process.
+ * Provides safe defaults for HOME and USER if they are missing,
+ * and adds flags to suppress interactive CLI warnings.
+ */
+function getBuildEnv() {
+    return {
+        ...process.env,
+        HOME: process.env.HOME || os.homedir(),
+        USER: process.env.USER || os.userInfo().username,
+        BOT: 'true',
+        CI: 'true',
+        FLUTTER_SUPPRESS_ANALYTICS: 'true'
+    };
+}
 
 /**
  * Main function to build APK and AAB
@@ -45,15 +62,11 @@ async function buildAPK(data, updateStatus) {
         await updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode);
         updateStatus(50);
 
-        // 5. Run Flutter Build
-        console.log(`[${buildId}] Running Flutter build...`);
-        const { spawn } = require('child_process');
-        
         const runBuild = (cmd, args, step) => {
             return new Promise((resolve, reject) => {
                 const child = spawn(cmd, args, { 
                     cwd: buildDir,
-                    env: { ...process.env, HOME: '/root', USER: 'root' }
+                    env: getBuildEnv()
                 });
 
                 child.stdout.on('data', (data) => {
@@ -71,10 +84,9 @@ async function buildAPK(data, updateStatus) {
             });
         };
 
-        // APK Build
         updateStatus(55);
         console.log(`[${buildId}] Accepting Android Licenses...`);
-        await execPromise('yes | flutter doctor --android-licenses', { env: { ...process.env, HOME: '/root', USER: 'root' } });
+        await execPromise('yes | flutter doctor --android-licenses', { env: getBuildEnv() });
         
         updateStatus(60);
         await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons', '--no-pub']);
