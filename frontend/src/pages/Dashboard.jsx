@@ -221,41 +221,47 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Row 4: Icon & Splash Upload */}
-              <div className="grid md:grid-cols-2 gap-6 border-t border-slate-800 pt-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    <Rocket size={16} /> App Icon (512x512 PNG)
+              {/* Row 4: Icon & Splash Upload (Premium Design) */}
+              <div className="grid md:grid-cols-2 gap-8 border-t border-slate-800 pt-8">
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
+                    <Rocket size={14} className="opacity-70" /> App Icon (512x512 PNG)
                   </label>
-                  <div className="flex gap-4 items-center">
-                    <div className="h-12 w-12 rounded-xl bg-slate-800 border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden">
-                      {iconPreview ? (
-                        <img src={iconPreview} alt="Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <Rocket size={20} className="text-slate-600" />
-                      )}
-                    </div>
-                    <label className="btn-secondary !py-1.5 !px-3 !text-xs cursor-pointer">
-                      Upload Logo
+                  <div className="flex items-center gap-4">
+                    <label className="flex-1 flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition-all cursor-pointer group">
+                      <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                        {iconPreview ? (
+                          <img src={iconPreview} alt="Preview" className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <Rocket size={20} />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-white">Upload Logo</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Click to select file</p>
+                      </div>
                       <input type="file" className="hidden" accept="image/*" onChange={handleIconChange} />
                     </label>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    <Palette size={16} /> Splash Image (Optional)
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-slate-500 flex items-center gap-2 uppercase tracking-wider">
+                    <Palette size={14} className="opacity-70" /> Splash Image (Optional)
                   </label>
-                  <div className="flex gap-4 items-center">
-                    <div className="h-12 w-12 rounded-xl bg-slate-800 border-2 border-dashed border-slate-700 flex items-center justify-center overflow-hidden">
-                      {splashPreview ? (
-                        <img src={splashPreview} alt="Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <Palette size={20} className="text-slate-600" />
-                      )}
-                    </div>
-                    <label className="btn-secondary !py-1.5 !px-3 !text-xs cursor-pointer">
-                      Upload Splash
+                  <div className="flex items-center gap-4">
+                    <label className="flex-1 flex items-center gap-3 p-4 bg-slate-900/50 border border-slate-800 rounded-xl hover:border-indigo-500/50 hover:bg-slate-800/50 transition-all cursor-pointer group">
+                      <div className="h-10 w-10 rounded-lg bg-slate-400/10 flex items-center justify-center text-slate-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                        {splashPreview ? (
+                          <img src={splashPreview} alt="Preview" className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <Palette size={20} />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-white">Upload Splash</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-tighter">Click to select file</p>
+                      </div>
                       <input type="file" className="hidden" accept="image/*" onChange={handleSplashChange} />
                     </label>
                   </div>
