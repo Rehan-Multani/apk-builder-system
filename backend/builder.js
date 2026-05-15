@@ -115,6 +115,10 @@ async function buildAPK(data, updateStatus) {
             console.log("License acceptance failed or already accepted");
         }
         
+        updateStatus(56);
+        console.log(`[${buildId}] Cleaning build artifacts...`);
+        await runBuild('flutter', ['clean']);
+
         updateStatus(58);
         console.log(`[${buildId}] Fetching dependencies...`);
         await runBuild('flutter', ['pub', 'get']);
@@ -231,8 +235,10 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
     const gradlePath = path.join(buildDir, 'android/app/build.gradle');
     if (await fs.pathExists(gradlePath)) {
         let gradle = await fs.readFile(gradlePath, 'utf8');
-        gradle = gradle.replace(/namespace\s*=\s*"[^"]*"/, `namespace = "${packageName}"`);
-        gradle = gradle.replace(/applicationId\s*=\s*"[^"]*"/, `applicationId = "${packageName}"`);
+        // Handle both: namespace = "com..." and namespace "com..."
+        gradle = gradle.replace(/namespace\s*=?\s*"[^"]*"/, `namespace = "${packageName}"`);
+        // Handle both: applicationId = "com..." and applicationId "com..."
+        gradle = gradle.replace(/applicationId\s*=?\s*"[^"]*"/, `applicationId = "${packageName}"`);
         gradle = gradle.replace(/versionName\s*"[^"]*"/, `versionName "${versionName || '1.0.0'}"`);
         gradle = gradle.replace(/versionCode\s*\d+/, `versionCode ${versionCode || '1'}`);
         
