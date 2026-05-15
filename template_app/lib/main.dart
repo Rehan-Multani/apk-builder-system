@@ -1,9 +1,19 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:http/http.dart' as http;
 
-void main() {
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
@@ -33,17 +43,42 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController _controller;
+  InAppWebViewController? webViewController;
+  PullToRefreshController? pullToRefreshController;
   String? targetUrl;
+  String? fcmStoreUrl;
+  Map<String, String>? apiHeaders;
   Color? splashColor;
   int splashDuration = 2;
-  bool isLoading = true;
+  double progress = 0;
   bool isSplashFinished = false;
+  bool isConfigLoaded = false;
+  bool isOffline = false;
 
   @override
   void initState() {
     super.initState();
     _loadConfig();
+    
+    pullToRefreshController = PullToRefreshController(
+      settings: PullToRefreshSettings(color: Colors.indigo),
+      onRefresh: () async {
+        if (Platform.isAndroid) {
+          webViewController?.reload();
+        } else if (Platform.isIOS) {
+          webViewController?.loadUrl(urlRequest: URLRequest(url: await webViewController?.getUrl()));
+        }
+        HapticFeedback.mediumImpact();
+      },
+    );
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message.notification!.title ?? 'New Notification')),
+        );
+      }
+    });
   }
 
   Future<void> _loadConfig() async {
@@ -53,88 +88,201 @@ class _WebViewScreenState extends State<WebViewScreen> {
       
       setState(() {
         targetUrl = data['url'];
+        fcmStoreUrl = data['fcmStoreUrl'];
+        if (data['apiHeaders'] != null) {
+          apiHeaders = Map<String, String>.from(data['apiHeaders']);
+        }
         splashDuration = int.tryParse(data['splashDuration']?.toString() ?? '2') ?? 2;
-        
-        // Parse hex color
         String colorHex = data['splashColor']?.toString().replaceAll('#', '') ?? 'ffffff';
         splashColor = Color(int.parse('FF$colorHex', radix: 16));
-        
-        _initController();
+        isConfigLoaded = true;
       });
 
-      // Show splash for specified duration
+      _initFirebase();
+
       await Future.delayed(Duration(seconds: splashDuration));
       if (mounted) {
-        setState(() {
-          isSplashFinished = true;
-        });
+        setState(() => isSplashFinished = true);
       }
     } catch (e) {
       debugPrint('Error loading config: $e');
-      setState(() => isSplashFinished = true);
+      setState(() {
+        isConfigLoaded = true;
+        isSplashFinished = true;
+      });
     }
   }
 
-  void _initController() {
-    if (targetUrl == null) return;
+  Future<void> _initFirebase() async {
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      await messaging.subscribeToTopic('all');
 
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (String url) {
-            setState(() => isLoading = true);
-          },
-          onPageFinished: (String url) {
-            setState(() => isLoading = false);
-          },
-          onWebResourceError: (WebResourceError error) {
-            debugPrint('WebView Error: ${error.description}');
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(targetUrl!));
+      String? token = await messaging.getToken();
+      if (token != null && fcmStoreUrl != null && fcmStoreUrl!.isNotEmpty) {
+        _sendTokenToBackend(token);
+      }
+    } catch (e) {
+      debugPrint("Firebase init error: $e");
+    }
+  }
+
+  Future<void> _sendTokenToBackend(String token) async {
+    try {
+      Map<String, String> requestHeaders = {
+        'Content-Type': 'application/json',
+      };
+      if (apiHeaders != null) {
+        requestHeaders.addAll(apiHeaders!);
+      }
+
+      final response = await http.post(
+        Uri.parse(fcmStoreUrl!),
+        headers: requestHeaders,
+        body: json.encode({
+          'token': token,
+          'platform': Platform.isAndroid ? 'android' : 'ios',
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+      debugPrint("Token sent status: \${response.statusCode}");
+    } catch (e) {
+      debugPrint("Error sending token: $e");
+    }
+  }
+
+  Future<bool> _onWillPop() async {
+    if (webViewController != null) {
+      if (await webViewController!.canGoBack()) {
+        webViewController!.goBack();
+        return false;
+      }
+    }
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: splashColor ?? Colors.white,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            if (targetUrl != null && isSplashFinished)
-              WebViewWidget(controller: _controller),
-            
-            // Flutter Splash Screen
-            if (!isSplashFinished)
-              Container(
-                color: splashColor ?? Colors.white,
-                child: Center(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: splashColor ?? Colors.white,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              if (isConfigLoaded && targetUrl != null)
+                Opacity(
+                  opacity: isSplashFinished ? 1.0 : 0.01,
+                  child: InAppWebView(
+                    initialUrlRequest: URLRequest(url: WebUri(targetUrl!)),
+                    pullToRefreshController: pullToRefreshController,
+                    initialSettings: InAppWebViewSettings(
+                      javaScriptEnabled: true,
+                      cacheEnabled: true,
+                      useHybridComposition: true,
+                      supportZoom: false,
+                      allowsInlineMediaPlayback: true,
+                      javaScriptCanOpenWindowsAutomatically: true,
+                      mediaPlaybackRequiresUserGesture: false,
+                      preferredContentMode: UserPreferredContentMode.MOBILE,
+                      cacheMode: CacheMode.LOAD_DEFAULT,
+                      useWideViewPort: true,
+                      loadWithOverviewMode: true,
+                      hardwareAcceleration: true,
+                    ),
+                    onWebViewCreated: (controller) {
+                      webViewController = controller;
+                    },
+                    onGeolocationPermissionsShowPrompt: (controller, origin) async {
+                      return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: true);
+                    },
+                    onProgressChanged: (controller, progress) {
+                      if (progress == 100) pullToRefreshController?.endRefreshing();
+                      setState(() {
+                        this.progress = progress / 100;
+                        if (progress > 50) isOffline = false;
+                      });
+                    },
+                    onReceivedError: (controller, request, error) {
+                      if (request.isForMainFrame) setState(() => isOffline = true);
+                    },
+                    shouldOverrideUrlLoading: (controller, navigationAction) async {
+                      var uri = navigationAction.request.url!;
+                      if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          return NavigationActionPolicy.CANCEL;
+                        }
+                      }
+                      return NavigationActionPolicy.ALLOW;
+                    },
+                  ),
+                ),
+              
+              if (isSplashFinished && progress < 1.0 && !isOffline)
+                LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
+                ),
+
+              if (isOffline && isSplashFinished)
+                Container(
+                  color: Colors.white,
+                  width: double.infinity,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.asset(
-                        'assets/launch_image.png',
-                        width: 150,
-                        height: 150,
-                        errorBuilder: (context, error, stackTrace) => const SizedBox(),
-                      ),
-                      const SizedBox(height: 24),
-                      CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          (splashColor?.computeLuminance() ?? 0) > 0.5 ? Colors.black : Colors.white
+                      const Icon(Icons.wifi_off_rounded, size: 80, color: Colors.grey),
+                      const SizedBox(height: 20),
+                      const Text("No Internet Connection", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black54)),
+                      const SizedBox(height: 30),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() => isOffline = false);
+                          webViewController?.reload();
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text("Retry"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
 
-            // Loading indicator for WebView
-            if (isSplashFinished && isLoading)
-              const Center(child: CircularProgressIndicator()),
-          ],
+              if (!isSplashFinished)
+                Container(
+                  color: splashColor ?? Colors.white,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Image.asset(
+                          'assets/launch_image.png',
+                          width: 150,
+                          height: 150,
+                          errorBuilder: (context, error, stackTrace) => const SizedBox(),
+                        ),
+                        const SizedBox(height: 24),
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            (splashColor?.computeLuminance() ?? 0) > 0.5 ? Colors.black : Colors.white
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -25,7 +25,7 @@ function getBuildEnv() {
  * Main function to build APK and AAB
  */
 async function buildAPK(data, updateStatus) {
-    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName } = data;
+    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName, googleServicesPath, fcmStoreUrl, apiHeaders } = data;
     const baseDir = path.join(__dirname, '../');
     const templateDir = path.join(baseDir, 'template_app');
     const buildDir = path.join(baseDir, 'builds', buildId);
@@ -42,13 +42,23 @@ async function buildAPK(data, updateStatus) {
         await fs.copy(templateDir, buildDir);
         updateStatus(20);
 
-        // 2. Update config.json
+        // 2. Handle Google Services JSON
+        if (googleServicesPath && await fs.pathExists(googleServicesPath)) {
+            const destPath = path.join(buildDir, 'android/app/google-services.json');
+            await fs.copy(googleServicesPath, destPath);
+            await applyFirebasePlugins(buildDir);
+        }
+
+        // 3. Update config.json
         const configPath = path.join(buildDir, 'assets/config.json');
         const config = {
             url,
             appName,
-            splashColor,
-            splashMode: splashMode || 'color'
+            splashColor: splashColor || '#6366f1',
+            splashMode: splashMode || 'color',
+            splashDuration: splashDuration || '2',
+            fcmStoreUrl: fcmStoreUrl || '',
+            apiHeaders: apiHeaders || {}
         };
         await fs.writeJson(configPath, config);
         updateStatus(30);
@@ -95,7 +105,7 @@ async function buildAPK(data, updateStatus) {
         await execPromise('yes | flutter doctor --android-licenses', { env: getBuildEnv() });
         
         updateStatus(60);
-        await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons', '--no-pub']);
+        await runBuild('flutter', ['build', 'apk', '--release', '--split-per-abi', '--no-tree-shake-icons', '--no-pub']);
         
         updateStatus(80);
         // AAB Build
@@ -157,6 +167,37 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         if (manifest.includes('package=')) {
             manifest = manifest.replace(/package="[^"]*"/, `package="${packageName}"`);
         }
+
+        // Add Hardware Acceleration and Launch Mode
+        if (manifest.includes('<application')) {
+            manifest = manifest.replace('<application', '<application android:hardwareAccelerated="true" android:usesCleartextTraffic="true"');
+        }
+        if (manifest.includes('<activity')) {
+            manifest = manifest.replace('<activity', '<activity android:launchMode="singleTask"');
+        }
+
+        // Add Permissions (Camera, Mic, Location, Firebase)
+        const permissions = `
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.VIDEO_CAPTURE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+`;
+        if (!manifest.includes('android.permission.CAMERA')) {
+            manifest = manifest.replace('</manifest>', `${permissions}\n</manifest>`);
+        }
+
         await fs.writeFile(manifestPath, manifest);
     }
 
@@ -168,6 +209,10 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         gradle = gradle.replace(/applicationId\s*=\s*"[^"]*"/, `applicationId = "${packageName}"`);
         gradle = gradle.replace(/versionName\s*"[^"]*"/, `versionName "${versionName || '1.0.0'}"`);
         gradle = gradle.replace(/versionCode\s*\d+/, `versionCode ${versionCode || '1'}`);
+        
+        // Ensure minSDK is high enough for InAppWebView (usually 19 or 21)
+        gradle = gradle.replace(/minSdkVersion\s*\d+/, 'minSdkVersion 21');
+        
         await fs.writeFile(gradlePath, gradle);
     }
 
@@ -233,6 +278,33 @@ async function generateAppIcons(buildDir, iconPath) {
         await sharp(iconPath)
             .resize(s.size, s.size)
             .toFile(path.join(dir, 'ic_launcher.png'));
+    }
+}
+
+/**
+ * Applies Google Services Gradle Plugins
+ */
+async function applyFirebasePlugins(buildDir) {
+    // 1. Root build.gradle
+    const rootGradlePath = path.join(buildDir, 'android/build.gradle');
+    if (await fs.pathExists(rootGradlePath)) {
+        let rootGradle = await fs.readFile(rootGradlePath, 'utf8');
+        const classpath = "        classpath 'com.google.gms:google-services:4.4.0'";
+        if (!rootGradle.includes('google-services')) {
+            rootGradle = rootGradle.replace('dependencies {', `dependencies {\n${classpath}`);
+            await fs.writeFile(rootGradlePath, rootGradle);
+        }
+    }
+
+    // 2. App build.gradle
+    const appGradlePath = path.join(buildDir, 'android/app/build.gradle');
+    if (await fs.pathExists(appGradlePath)) {
+        let appGradle = await fs.readFile(appGradlePath, 'utf8');
+        const plugin = "\napply plugin: 'com.google.gms.google-services'";
+        if (!appGradle.includes('com.google.gms.google-services')) {
+            appGradle += plugin;
+            await fs.writeFile(appGradlePath, appGradle);
+        }
     }
 }
 

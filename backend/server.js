@@ -111,12 +111,14 @@ app.get('/api/history', authenticate, async (req, res) => {
 
 app.post('/api/build', authenticate, upload.fields([
     { name: 'icon', maxCount: 1 },
-    { name: 'splash', maxCount: 1 }
+    { name: 'splash', maxCount: 1 },
+    { name: 'googleServices', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { url, appName, packageName: rawPackageName, splashColor, versionName, versionCode, splashDuration, storePassword, keyPassword, keyAlias, keystoreName } = req.body;
+        const { url, appName, packageName: rawPackageName, splashColor, versionName, versionCode, splashDuration, storePassword, keyPassword, keyAlias, keystoreName, useFirebase, fcmStoreUrl, apiHeaders } = req.body;
         const iconPath = req.files['icon'] ? req.files['icon'][0].path : null;
         const splashPath = req.files['splash'] ? req.files['splash'][0].path : null;
+        const googleServicesPath = req.files['googleServices'] ? req.files['googleServices'][0].path : null;
 
         if (!url || !appName) {
             return res.status(400).json({ error: 'URL and App Name are required' });
@@ -141,6 +143,7 @@ app.post('/api/build', authenticate, upload.fields([
             keyAlias: keyAlias || 'upload',
             keyPassword: keyPassword || 'rehan_password_2024',
             storePassword: storePassword || 'rehan_password_2024',
+            googleServicesPath,
             userId: req.user._id
         });
 
@@ -159,7 +162,10 @@ app.post('/api/build', authenticate, upload.fields([
             storePassword,
             keyPassword,
             keyAlias,
-            keystoreName
+            keystoreName,
+            googleServicesPath,
+            fcmStoreUrl,
+            apiHeaders: typeof apiHeaders === 'string' ? JSON.parse(apiHeaders) : apiHeaders
         }, { jobId: buildId });
         res.json({ message: 'Build queued', jobId: job.id, build: newBuild });
     } catch (err) {

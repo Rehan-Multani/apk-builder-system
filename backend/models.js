@@ -32,6 +32,7 @@ const buildSchema = new mongoose.Schema({
     keyAlias: { type: String },
     keyPassword: { type: String },
     storePassword: { type: String },
+    googleServicesPath: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
 });

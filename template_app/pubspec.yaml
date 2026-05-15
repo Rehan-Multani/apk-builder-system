@@ -9,12 +9,17 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  webview_flutter: ^4.4.2
+  flutter_inappwebview: ^6.0.0
+  url_launcher: ^6.2.1
+  firebase_core: ^3.0.0
+  firebase_messaging: ^15.0.0
+  http: ^1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_native_splash: ^2.3.0
 
 flutter:
   uses-material-design: true

@@ -22,8 +22,14 @@ const Dashboard = () => {
     keyPassword: '',
     keyAlias: '',
     keystoreName: '',
-    autoUnique: false
+    autoUnique: false,
+    useFirebase: false,
+    fcmCurl: '',
+    fcmStoreUrl: '',
+    apiHeaders: {}
   });
+  const [googleServices, setGoogleServices] = useState(null);
+  const [firebaseAdmin, setFirebaseAdmin] = useState(null);
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -114,8 +120,13 @@ const Dashboard = () => {
       data.append('keyPassword', formData.keyPassword);
       data.append('keyAlias', formData.keyAlias);
       data.append('keystoreName', formData.keystoreName);
+      data.append('useFirebase', formData.useFirebase);
+      data.append('fcmStoreUrl', formData.fcmStoreUrl);
+      data.append('apiHeaders', JSON.stringify(formData.apiHeaders));
       if (icon) data.append('icon', icon);
       if (splashImage) data.append('splash', splashImage);
+      if (googleServices) data.append('googleServices', googleServices);
+      if (firebaseAdmin) data.append('firebaseAdmin', firebaseAdmin);
 
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE}/build`, data, {
@@ -469,7 +480,79 @@ const Dashboard = () => {
                   </div>
                 </div>
               </div> 
+              
+              {/* Row 6: Firebase & Push Notifications */}
+              <div className="space-y-4 border-t border-slate-800 pt-8">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Rocket className="text-orange-500" size={18} />
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Firebase & Push Notifications (Optional)</h3>
+                  </div>
+                </div>
 
+                <div className="flex items-center gap-2 mb-4">
+                  <input 
+                    type="checkbox" 
+                    id="useFirebase"
+                    className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-indigo-500"
+                    checked={formData.useFirebase}
+                    onChange={(e) => setFormData({...formData, useFirebase: e.target.checked})}
+                  />
+                  <label htmlFor="useFirebase" className="text-xs text-slate-400">Enable Firebase Support (FCM)</label>
+                </div>
+
+                {formData.useFirebase && (
+                  <div className="space-y-6 animate-slide-up">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Google Services JSON (For APK)</label>
+                      <input 
+                        type="file" 
+                        accept=".json"
+                        className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-500/10 file:text-indigo-400 hover:file:bg-indigo-500/20"
+                        onChange={(e) => setGoogleServices(e.target.files[0])}
+                      />
+                      <p className="text-[9px] text-slate-600">Download from Firebase Console (Settings &gt; Project Settings)</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">FCM Token Sync CURL (Paste from Postman/Docs)</label>
+                      <div className="input-group">
+                        <textarea 
+                          rows="4"
+                          placeholder='curl -X POST https://api.yoursite.com/tokens -H "Authorization: Bearer 123"'
+                          className="!text-[10px] font-mono leading-relaxed p-3"
+                          value={formData.fcmCurl}
+                          onChange={(e) => {
+                            const curl = e.target.value;
+                            // Basic CURL Parser
+                            const urlMatch = curl.match(/https?:\/\/[^\s"']+/);
+                            const headers = {};
+                            const headerMatches = curl.matchAll(/-H\s+["']([^"']+)["']/g);
+                            for (const match of headerMatches) {
+                              const [key, ...value] = match[1].split(':');
+                              if (key && value) headers[key.trim()] = value.join(':').trim();
+                            }
+                            setFormData({
+                              ...formData, 
+                              fcmCurl: curl,
+                              fcmStoreUrl: urlMatch ? urlMatch[0] : '',
+                              apiHeaders: headers
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center px-1">
+                        <p className="text-[9px] text-slate-600">Paste the CURL command provided by your backend developer.</p>
+                        {formData.fcmStoreUrl && (
+                          <span className="text-[9px] text-emerald-500 font-bold flex items-center gap-1 animate-pulse">
+                            <CheckCircle size={10} /> Parsed Successfully
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button 
                 type="submit" 
                 disabled={loading || (jobId && status?.state !== 'completed' && status?.state !== 'failed')}
