@@ -397,7 +397,7 @@ const Dashboard = () => {
               </div>
 
               {/* Row 5: Advanced Android Signing */}
-             {/*  <div className="space-y-4 border-t border-slate-800 pt-8">
+              <div className="space-y-4 border-t border-slate-800 pt-8">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="text-indigo-500" size={18} />
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">Advanced Android Signing (Optional)</h3>
@@ -448,7 +448,7 @@ const Dashboard = () => {
                     </div>
                   </div>
                 </div>
-              </div> */}
+              </div> 
 
               <button 
                 type="submit" 
