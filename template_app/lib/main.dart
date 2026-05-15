@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -59,6 +60,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
     _loadConfig();
+    _requestAllPermissions();
     
     pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: Colors.indigo),
@@ -79,6 +81,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
         );
       }
     });
+  }
+
+  Future<void> _requestAllPermissions() async {
+    // Request multiple permissions at once
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.camera,
+      Permission.location,
+      Permission.microphone,
+      Permission.notification,
+    ].request();
+    
+    debugPrint("Permissions Status: \$statuses");
   }
 
   Future<void> _loadConfig() async {
@@ -139,7 +153,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         'Content-Type': 'application/json',
       };
       
-      // Use dynamic authToken if provided, otherwise fallback to static apiHeaders
       if (authToken != null && authToken.isNotEmpty) {
         requestHeaders['Authorization'] = 'Bearer $authToken';
       } else if (apiHeaders != null) {
@@ -228,14 +241,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     onWebViewCreated: (controller) {
                       webViewController = controller;
                       
-                      // Register JavaScript Handler for dynamic token sync
                       controller.addJavaScriptHandler(handlerName: 'syncUserToken', callback: (args) {
                         if (args.isNotEmpty) {
                           final data = args[0];
                           final userId = data['userId']?.toString();
                           final authToken = data['authToken']?.toString();
                           
-                          // Get FCM Token and Sync with these details
                           FirebaseMessaging.instance.getToken().then((token) {
                             if (token != null) {
                               _sendTokenWithUserData(token, userId, authToken);
@@ -243,6 +254,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           });
                         }
                       });
+                    },
+                    onPermissionRequest: (controller, request) async {
+                      return PermissionResponse(
+                        resources: request.resources,
+                        action: PermissionResponseAction.GRANT,
+                      );
                     },
                     onGeolocationPermissionsShowPrompt: (controller, origin) async {
                       return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: true);
