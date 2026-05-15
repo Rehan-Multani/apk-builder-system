@@ -115,12 +115,17 @@ async function buildAPK(data, updateStatus) {
             console.log("License acceptance failed or already accepted");
         }
         
+        updateStatus(58);
+        console.log(`[${buildId}] Fetching dependencies...`);
+        await runBuild('flutter', ['pub', 'get']);
+        
         updateStatus(60);
-        await runBuild('flutter', ['build', 'apk', '--release', '--split-per-abi', '--no-tree-shake-icons', '--no-pub']);
+        console.log(`[${buildId}] Building APK...`);
+        await runBuild('flutter', ['build', 'apk', '--release', '--split-per-abi', '--no-tree-shake-icons']);
         
         updateStatus(80);
-        // AAB Build
-        await runBuild('flutter', ['build', 'appbundle', '--release', '--no-tree-shake-icons', '--no-pub']);
+        console.log(`[${buildId}] Building App Bundle...`);
+        await runBuild('flutter', ['build', 'appbundle', '--release', '--no-tree-shake-icons']);
         
         updateStatus(95);
 
