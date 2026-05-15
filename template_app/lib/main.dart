@@ -255,7 +255,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       });
                     },
                     onReceivedError: (controller, request, error) {
-                      if (request.isForMainFrame) setState(() => isOffline = true);
+                      if (request.isForMainFrame == true) setState(() => isOffline = true);
                     },
                     shouldOverrideUrlLoading: (controller, navigationAction) async {
                       var uri = navigationAction.request.url!;
