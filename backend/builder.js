@@ -99,7 +99,7 @@ async function buildAPK(data, updateStatus) {
                 child.on('close', (code) => {
                     if (code === 0) resolve();
                     else {
-                        const shortError = errorOutput.split('\n').filter(line => line.trim().length > 0).slice(-3).join('\n');
+                        const shortError = errorOutput.split('\n').filter(line => line.trim().length > 0).slice(-20).join('\n');
                         reject(new Error(`${cmd} failed with code ${code}.\n${shortError}`));
                     }
                 });
@@ -108,7 +108,12 @@ async function buildAPK(data, updateStatus) {
 
         updateStatus(55);
         console.log(`[${buildId}] Accepting Android Licenses...`);
-        await execPromise('yes | flutter doctor --android-licenses', { env: getBuildEnv() });
+        const licenseCmd = process.platform === 'win32' ? 'echo y | flutter doctor --android-licenses' : 'yes | flutter doctor --android-licenses';
+        try {
+            await execPromise(licenseCmd, { env: getBuildEnv() });
+        } catch (e) {
+            console.log("License acceptance failed or already accepted");
+        }
         
         updateStatus(60);
         await runBuild('flutter', ['build', 'apk', '--release', '--split-per-abi', '--no-tree-shake-icons', '--no-pub']);
@@ -217,7 +222,8 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         gradle = gradle.replace(/versionCode\s*\d+/, `versionCode ${versionCode || '1'}`);
         
         // Ensure minSDK is high enough for InAppWebView (usually 19 or 21)
-        gradle = gradle.replace(/minSdkVersion\s*\d+/, 'minSdkVersion 21');
+        // Ensure minSDK is high enough for Firebase and InAppWebView
+        gradle = gradle.replace(/minSdkVersion\s+(?:\d+|flutter\.minSdkVersion)/, 'minSdkVersion 21');
         
         await fs.writeFile(gradlePath, gradle);
     }
