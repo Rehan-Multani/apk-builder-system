@@ -272,20 +272,25 @@ async function setupSigning(buildDir, signingData) {
     const keyPass = signingData.keyPassword || 'rehan_password_2024';
     const keyAlias = signingData.keyAlias || 'upload';
     
+    const sanitize = (str) => str.replace(/[`"'$()]/g, '');
+    const sStorePass = sanitize(storePass);
+    const sKeyPass = sanitize(keyPass);
+    const sKeyAlias = sanitize(keyAlias);
+
     // 1. Generate Keystore if doesn't exist
     if (!(await fs.pathExists(keyPath))) {
-        if (storePass.length < 6 || keyPass.length < 6) {
+        if (sStorePass.length < 6 || sKeyPass.length < 6) {
             throw new Error('Keystore passwords must be at least 6 characters long.');
         }
         
         await fs.ensureDir(path.dirname(keyPath));
         console.log('Generating new keystore...');
-        const keygenCmd = `keytool -genkey -v -keystore "${keyPath}" -keyalg RSA -keysize 2048 -validity 10000 -alias "${keyAlias}" -storepass "${storePass}" -keypass "${keyPass}" -dname "CN=Rehan, OU=Dev, O=Wapixo, L=Mumbai, S=MH, C=IN"`;
+        const keygenCmd = `keytool -genkey -v -keystore "${keyPath}" -keyalg RSA -keysize 2048 -validity 10000 -alias "${sKeyAlias}" -storepass "${sStorePass}" -keypass "${sKeyPass}" -dname "CN=Rehan, OU=Dev, O=Wapixo, L=Mumbai, S=MH, C=IN"`;
         await execPromise(keygenCmd);
     }
 
     // 2. Create key.properties
-    const propsContent = `storePassword=${storePass}\nkeyPassword=${keyPass}\nkeyAlias=${keyAlias}\nstoreFile=upload-keystore.jks`;
+    const propsContent = `storePassword=${sStorePass}\nkeyPassword=${sKeyPass}\nkeyAlias=${sKeyAlias}\nstoreFile=upload-keystore.jks`;
     await fs.writeFile(propsPath, propsContent);
 }
 
