@@ -80,6 +80,7 @@ async function buildAPK(data, updateStatus) {
 
         const runBuild = (cmd, args, step) => {
             return new Promise((resolve, reject) => {
+                let errorOutput = '';
                 const child = spawn(cmd, args, { 
                     cwd: buildDir,
                     env: getBuildEnv()
@@ -90,12 +91,17 @@ async function buildAPK(data, updateStatus) {
                 });
 
                 child.stderr.on('data', (data) => {
-                    console.error(`[${buildId}] STDERR: ${data}`);
+                    const str = data.toString();
+                    errorOutput += str;
+                    console.error(`[${buildId}] STDERR: ${str}`);
                 });
 
                 child.on('close', (code) => {
                     if (code === 0) resolve();
-                    else reject(new Error(`${cmd} failed with code ${code}`));
+                    else {
+                        const shortError = errorOutput.split('\n').filter(line => line.trim().length > 0).slice(-3).join('\n');
+                        reject(new Error(`${cmd} failed with code ${code}.\n${shortError}`));
+                    }
                 });
             });
         };

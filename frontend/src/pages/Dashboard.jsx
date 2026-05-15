@@ -655,9 +655,22 @@ const Dashboard = () => {
                 )}
 
                 {status?.state === 'failed' && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-                    <p className="text-danger text-sm font-bold">Build Failed</p>
-                    <p className="text-xs text-slate-400 mt-1">Please check your configuration and try again.</p>
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2 text-red-500 font-bold text-sm">
+                      <XCircle size={18} />
+                      Build Failed
+                    </div>
+                    {status.error && (
+                      <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Error Details</p>
+                        <p className="text-xs text-red-400 font-mono break-all leading-relaxed whitespace-pre-wrap">
+                          {status.error}
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-slate-500 italic mt-2">
+                      * Please check your configuration (URL, Passwords, Files) and try again.
+                    </p>
                   </div>
                 )}
               </div>
