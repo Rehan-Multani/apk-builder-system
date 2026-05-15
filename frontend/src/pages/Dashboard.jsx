@@ -513,6 +513,14 @@ const Dashboard = () => {
                       <ShieldCheck size={18} />
                       Dual Build Successful
                     </div>
+                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 space-y-1 mb-2">
+                      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Signing Properties</p>
+                      <div className="grid grid-cols-1 gap-1 text-[11px] font-mono">
+                        <p className="text-slate-300"><span className="text-indigo-400">Alias:</span> {formData.keyAlias || 'upload'}</p>
+                        <p className="text-slate-300"><span className="text-indigo-400">Key Pass:</span> {formData.keyPassword || 'rehan_password_2024'}</p>
+                        <p className="text-slate-300"><span className="text-indigo-400">Store Pass:</span> {formData.storePassword || 'rehan_password_2024'}</p>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 gap-3">
                       <a 
                         href={`https://backend.cloudedata.in${status.result?.apkUrl}`} 
@@ -528,6 +536,15 @@ const Dashboard = () => {
                       >
                         <Download size={16} /> Download AAB (Play Store)
                       </a>
+                      {status.result?.jksUrl && (
+                        <a 
+                          href={`https://backend.cloudedata.in${status.result?.jksUrl}`} 
+                          className="btn-secondary !border-slate-700 !text-slate-400 hover:!bg-slate-800 !py-2 !text-sm"
+                          download
+                        >
+                          <Download size={16} /> Download Keystore (JKS)
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}

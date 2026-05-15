@@ -59,6 +59,7 @@ const History = () => {
               <tr style={{ background: 'rgba(15, 23, 42, 0.5)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Project</th>
                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Configuration</th>
+                <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Key Properties</th>
                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Status</th>
                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', textAlign: 'right' }}>Downloads</th>
               </tr>
@@ -66,14 +67,14 @@ const History = () => {
             <tbody className="divide-y divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan="4" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-dim)' }}>
+                  <td colSpan="5" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-dim)' }}>
                     <Loader2 className="animate-spin inline mr-2" size={20} />
                     Loading history...
                   </td>
                 </tr>
               ) : builds.length === 0 ? (
                 <tr>
-                  <td colSpan="4" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-dim)' }}>
+                  <td colSpan="5" style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-dim)' }}>
                     No builds found. Start by creating a new project.
                   </td>
                 </tr>
@@ -103,24 +104,40 @@ const History = () => {
                     </div>
                   </td>
                   <td style={{ padding: '1.25rem 1.5rem' }}>
+                    <div className="space-y-1 text-[10px] font-mono">
+                      <p className="text-slate-400"><span className="text-indigo-400">Alias:</span> {build.keyAlias || 'N/A'}</p>
+                      <p className="text-slate-400"><span className="text-indigo-400">Key Pass:</span> {build.keyPassword || 'N/A'}</p>
+                      <p className="text-slate-400"><span className="text-indigo-400">Store Pass:</span> {build.storePassword || 'N/A'}</p>
+                    </div>
+                  </td>
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
                     {getStatusBadge(build.status)}
                   </td>
                   <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
                     {build.status === 'completed' && (
                       <div className="flex flex-col gap-2">
+                        <div className="flex gap-2 justify-end">
+                          <a 
+                            href={`https://backend.cloudedata.in${build.apkUrl}`} 
+                            download
+                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
+                          >
+                            <Download size={14} /> APK
+                          </a>
+                          <a 
+                            href={`https://backend.cloudedata.in${build.aabUrl}`} 
+                            download
+                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
+                          >
+                            <Download size={14} /> AAB
+                          </a>
+                        </div>
                         <a 
-                          href={build.apkUrl}
+                          href={`https://backend.cloudedata.in${build.jksUrl}`} 
                           download
-                          className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
+                          className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all no-underline hover:bg-slate-600 hover:text-white"
                         >
-                          <Download size={14} /> APK
-                        </a>
-                        <a 
-                          href={build.aabUrl}
-                          download
-                          className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-bold transition-all no-underline"
-                        >
-                          <Download size={14} /> AAB
+                          <Download size={14} /> JKS (Keystore)
                         </a>
                       </div>
                     )}

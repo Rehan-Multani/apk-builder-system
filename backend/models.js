@@ -28,6 +28,10 @@ const buildSchema = new mongoose.Schema({
     error: { type: String },
     apkUrl: { type: String },
     aabUrl: { type: String },
+    jksUrl: { type: String },
+    keyAlias: { type: String },
+    keyPassword: { type: String },
+    storePassword: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
 });

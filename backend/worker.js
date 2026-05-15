@@ -33,7 +33,11 @@ buildQueue.process('apk-build', async (job) => {
             status: 'completed', 
             progress: 100,
             apkUrl: result.apkUrl,
-            aabUrl: result.aabUrl
+            aabUrl: result.aabUrl,
+            jksUrl: result.jksUrl,
+            keyAlias: result.keyAlias,
+            keyPassword: result.keyPassword,
+            storePassword: result.storePassword
         });
 
         return { status: 'completed', ...result };

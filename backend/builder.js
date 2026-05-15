@@ -116,6 +116,7 @@ async function buildAPK(data, updateStatus) {
 
         await fs.copy(apkSource, path.join(storageDir, apkName));
         await fs.copy(aabSource, path.join(storageDir, aabName));
+        await fs.copy(jksSource, path.join(storageDir, jksName));
         
         // Backup Keystore (Very Important for updates!)
         const keystoreBackupDir = path.join(baseDir, 'keystore_backups');
@@ -125,9 +126,13 @@ async function buildAPK(data, updateStatus) {
         return {
             apkUrl: `/apks/${apkName}`,
             aabUrl: `/apks/${aabName}`,
+            jksUrl: `/apks/${jksName}`,
             apkPath: path.join(storageDir, apkName),
             apkName,
-            aabName
+            aabName,
+            keyAlias: signingData.keyAlias || 'upload',
+            keyPassword: signingData.keyPassword || 'rehan_password_2024',
+            storePassword: signingData.storePassword || 'rehan_password_2024'
         };
 
     } catch (error) {

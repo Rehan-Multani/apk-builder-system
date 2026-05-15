@@ -138,6 +138,9 @@ app.post('/api/build', authenticate, upload.fields([
             versionName: versionName || '1.0.0',
             versionCode: versionCode || '1',
             status: 'queued',
+            keyAlias: keyAlias || 'upload',
+            keyPassword: keyPassword || 'rehan_password_2024',
+            storePassword: storePassword || 'rehan_password_2024',
             userId: req.user._id
         });
 
