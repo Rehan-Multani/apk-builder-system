@@ -439,7 +439,8 @@ const Dashboard = () => {
                     <div className="input-group">
                       <input 
                         type="password" 
-                        placeholder="Leave blank for default"
+                        placeholder="Min. 6 characters"
+                        minLength={6}
                         value={formData.storePassword}
                         onChange={(e) => setFormData({...formData, storePassword: e.target.value})}
                       />
@@ -450,7 +451,8 @@ const Dashboard = () => {
                     <div className="input-group">
                       <input 
                         type="password" 
-                        placeholder="Leave blank for default"
+                        placeholder="Min. 6 characters"
+                        minLength={6}
                         value={formData.keyPassword}
                         onChange={(e) => setFormData({...formData, keyPassword: e.target.value})}
                       />

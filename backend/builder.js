@@ -247,6 +247,11 @@ async function setupSigning(buildDir, signingData) {
     
     // 1. Generate Keystore if doesn't exist
     if (!(await fs.pathExists(keyPath))) {
+        if (storePass.length < 6 || keyPass.length < 6) {
+            throw new Error('Keystore passwords must be at least 6 characters long.');
+        }
+        
+        await fs.ensureDir(path.dirname(keyPath));
         console.log('Generating new keystore...');
         const keygenCmd = `keytool -genkey -v -keystore "${keyPath}" -keyalg RSA -keysize 2048 -validity 10000 -alias "${keyAlias}" -storepass "${storePass}" -keypass "${keyPass}" -dname "CN=Rehan, OU=Dev, O=Wapixo, L=Mumbai, S=MH, C=IN"`;
         await execPromise(keygenCmd);
