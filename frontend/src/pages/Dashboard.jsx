@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   Rocket, ShieldCheck, Globe, Palette, Clock, CheckCircle, 
-  Download, Loader2, Play, Info, Smartphone, AlertCircle, X, Settings, Package 
+  Download, Loader2, Play, Info, Smartphone, AlertCircle, X, Settings, Package, XCircle 
 } from 'lucide-react';
 
 const API_BASE = `https://backend.cloudedata.in/api`;
