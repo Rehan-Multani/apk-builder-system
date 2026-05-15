@@ -131,6 +131,37 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  Future<void> _sendTokenWithUserData(String token, String? userId, String? authToken) async {
+    try {
+      if (fcmStoreUrl == null || fcmStoreUrl!.isEmpty) return;
+
+      Map<String, String> requestHeaders = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Use dynamic authToken if provided, otherwise fallback to static apiHeaders
+      if (authToken != null && authToken.isNotEmpty) {
+        requestHeaders['Authorization'] = 'Bearer $authToken';
+      } else if (apiHeaders != null) {
+        requestHeaders.addAll(apiHeaders!);
+      }
+
+      final response = await http.post(
+        Uri.parse(fcmStoreUrl!),
+        headers: requestHeaders,
+        body: json.encode({
+          'token': token,
+          'userId': userId,
+          'platform': Platform.isAndroid ? 'android' : 'ios',
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+      debugPrint("User Token Sync status: \${response.statusCode}");
+    } catch (e) {
+      debugPrint("Error syncing user token: $e");
+    }
+  }
+
   Future<void> _sendTokenToBackend(String token) async {
     try {
       Map<String, String> requestHeaders = {
@@ -196,6 +227,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     ),
                     onWebViewCreated: (controller) {
                       webViewController = controller;
+                      
+                      // Register JavaScript Handler for dynamic token sync
+                      controller.addJavaScriptHandler(handlerName: 'syncUserToken', callback: (args) {
+                        if (args.isNotEmpty) {
+                          final data = args[0];
+                          final userId = data['userId']?.toString();
+                          final authToken = data['authToken']?.toString();
+                          
+                          // Get FCM Token and Sync with these details
+                          FirebaseMessaging.instance.getToken().then((token) {
+                            if (token != null) {
+                              _sendTokenWithUserData(token, userId, authToken);
+                            }
+                          });
+                        }
+                      });
                     },
                     onGeolocationPermissionsShowPrompt: (controller, origin) async {
                       return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: true);
