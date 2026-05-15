@@ -130,9 +130,9 @@ async function buildAPK(data, updateStatus) {
             apkPath: path.join(storageDir, apkName),
             apkName,
             aabName,
-            keyAlias: signingData.keyAlias || 'upload',
-            keyPassword: signingData.keyPassword || 'rehan_password_2024',
-            storePassword: signingData.storePassword || 'rehan_password_2024'
+            keyAlias: keyAlias || 'upload',
+            keyPassword: keyPassword || 'rehan_password_2024',
+            storePassword: storePassword || 'rehan_password_2024'
         };
 
     } catch (error) {
