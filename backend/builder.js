@@ -184,12 +184,22 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
             manifest = manifest.replace(/package="[^"]*"/, `package="${packageName}"`);
         }
 
-        // Add Hardware Acceleration and Launch Mode
+        // Add Hardware Acceleration and Launch Mode (Safely)
         if (manifest.includes('<application')) {
-            manifest = manifest.replace('<application', '<application android:hardwareAccelerated="true" android:usesCleartextTraffic="true"');
+            if (!manifest.includes('android:hardwareAccelerated')) {
+                manifest = manifest.replace('<application', '<application android:hardwareAccelerated="true"');
+            }
+            if (!manifest.includes('android:usesCleartextTraffic')) {
+                manifest = manifest.replace('<application', '<application android:usesCleartextTraffic="true"');
+            }
         }
+        
         if (manifest.includes('<activity')) {
-            manifest = manifest.replace('<activity', '<activity android:launchMode="singleTask"');
+            if (manifest.includes('android:launchMode')) {
+                manifest = manifest.replace(/android:launchMode="[^"]*"/, 'android:launchMode="singleTask"');
+            } else {
+                manifest = manifest.replace('<activity', '<activity android:launchMode="singleTask"');
+            }
         }
 
         // Add Permissions (Camera, Mic, Location, Firebase)
