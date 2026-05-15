@@ -21,7 +21,8 @@ const Dashboard = () => {
     storePassword: '',
     keyPassword: '',
     keyAlias: '',
-    keystoreName: ''
+    keystoreName: '',
+    autoUnique: false
   });
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
@@ -34,9 +35,19 @@ const Dashboard = () => {
 
   const ESTIMATED_TOTAL_TIME = 420; // 7 minutes average
 
-  const handleAppNameChange = (name) => {
-    const pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.app`;
+  const handleAppNameChange = (name, forceUnique = formData.autoUnique) => {
+    let pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.app`;
+    if (forceUnique) {
+      const suffix = Math.floor(1000 + Math.random() * 9000);
+      pkg = `com.${name.toLowerCase().replace(/\s+/g, '')}.v${suffix}`;
+    }
     setFormData({ ...formData, appName: name, packageName: pkg });
+  };
+
+  const toggleUnique = () => {
+    const newVal = !formData.autoUnique;
+    setFormData(prev => ({ ...prev, autoUnique: newVal }));
+    handleAppNameChange(formData.appName, newVal);
   };
 
   const handleIconChange = (e) => {
@@ -210,9 +221,18 @@ const Dashboard = () => {
               {/* Row 2: Package Name, Splash Color & Duration */}
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                    <Package size={16} /> Package Name
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                      <Package size={16} /> Package Name
+                    </label>
+                    <button 
+                      type="button"
+                      onClick={toggleUnique}
+                      className={`text-[10px] px-2 py-0.5 rounded-full transition-all border ${formData.autoUnique ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}
+                    >
+                      {formData.autoUnique ? '✓ Separate App Mode' : '+ Make Separate App'}
+                    </button>
+                  </div>
                   <div className="input-group">
                     <input 
                       type="text" 
