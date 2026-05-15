@@ -125,7 +125,7 @@ async function buildAPK(data, updateStatus) {
         
         updateStatus(60);
         console.log(`[${buildId}] Building APK...`);
-        await runBuild('flutter', ['build', 'apk', '--release', '--split-per-abi', '--no-tree-shake-icons']);
+        await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons']);
         
         updateStatus(80);
         console.log(`[${buildId}] Building App Bundle...`);
