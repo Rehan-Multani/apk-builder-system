@@ -58,6 +58,7 @@ async function buildAPK(data, updateStatus) {
             splashMode: splashMode || 'color',
             splashDuration: splashDuration || '2',
             fcmStoreUrl: fcmStoreUrl || '',
+            fcmBody: fcmBody || {},
             apiHeaders: apiHeaders || {}
         };
         await fs.writeJson(configPath, config);

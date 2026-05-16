@@ -56,6 +56,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   PullToRefreshController? pullToRefreshController;
   String? targetUrl;
   String? fcmStoreUrl;
+  Map<String, dynamic>? fcmBody;
   Map<String, String>? apiHeaders;
   Color? splashColor;
   int splashDuration = 2;
@@ -85,22 +86,31 @@ class _WebViewScreenState extends State<WebViewScreen> {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message.notification!.title ?? 'New Notification')),
+          SnackBar(
+            content: Text(message.notification!.title ?? 'New Notification'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
+      }
+    });
+
+    // Listen for token refresh
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+      debugPrint("FCM Token Refreshed: $newToken");
+      if (fcmStoreUrl != null && fcmStoreUrl!.isNotEmpty) {
+        _syncToken(newToken);
       }
     });
   }
 
   Future<void> _requestAllPermissions() async {
     // Request multiple permissions at once
-    Map<Permission, PermissionStatus> statuses = await [
+    await [
       Permission.camera,
       Permission.location,
       Permission.microphone,
       Permission.notification,
     ].request();
-    
-    debugPrint("Permissions Status: \$statuses");
   }
 
   Future<void> _loadConfig() async {
@@ -111,6 +121,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
       setState(() {
         targetUrl = data['url'];
         fcmStoreUrl = data['fcmStoreUrl'];
+        if (data['fcmBody'] != null) {
+          fcmBody = Map<String, dynamic>.from(data['fcmBody']);
+        }
         if (data['apiHeaders'] != null) {
           apiHeaders = Map<String, String>.from(data['apiHeaders']);
         }
@@ -139,68 +152,70 @@ class _WebViewScreenState extends State<WebViewScreen> {
     try {
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
-      await messaging.subscribeToTopic('all');
+      
+      // Retry token retrieval a few times if it's null
+      String? token;
+      int retries = 0;
+      while (token == null && retries < 3) {
+        token = await messaging.getToken();
+        if (token == null) {
+          await Future.delayed(const Duration(seconds: 2));
+          retries++;
+        }
+      }
 
-      String? token = await messaging.getToken();
-      if (token != null && fcmStoreUrl != null && fcmStoreUrl!.isNotEmpty) {
-        _sendTokenToBackend(token);
+      if (token != null) {
+        debugPrint("FCM Token: $token");
+        await messaging.subscribeToTopic('all');
+        if (fcmStoreUrl != null && fcmStoreUrl!.isNotEmpty) {
+          _syncToken(token);
+        }
       }
     } catch (e) {
       debugPrint("Firebase init error: $e");
     }
   }
 
-  Future<void> _sendTokenWithUserData(String token, String? userId, String? authToken) async {
+  Future<void> _syncToken(String token, {String? userId, String? authToken}) async {
     try {
       if (fcmStoreUrl == null || fcmStoreUrl!.isEmpty) return;
 
       Map<String, String> requestHeaders = {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       };
       
+      // Priority 1: Auth token from JS handler
+      // Priority 2: API Headers from config (CURL)
       if (authToken != null && authToken.isNotEmpty) {
         requestHeaders['Authorization'] = 'Bearer $authToken';
       } else if (apiHeaders != null) {
         requestHeaders.addAll(apiHeaders!);
       }
 
-      final response = await http.post(
-        Uri.parse(fcmStoreUrl!),
-        headers: requestHeaders,
-        body: json.encode({
-          'token': token,
-          'userId': userId,
-          'platform': Platform.isAndroid ? 'android' : 'ios',
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
-      );
-      debugPrint("User Token Sync status: \${response.statusCode}");
-    } catch (e) {
-      debugPrint("Error syncing user token: $e");
-    }
-  }
-
-  Future<void> _sendTokenToBackend(String token) async {
-    try {
-      Map<String, String> requestHeaders = {
-        'Content-Type': 'application/json',
+      final body = {
+        if (fcmBody != null) ...fcmBody!,
+        'token': token,
+        'fcmToken': token, // Alias for compatibility
+        'fcm_token': token, // Alias for compatibility
+        'platform': Platform.isAndroid ? 'android' : 'ios',
+        'userId': userId,
+        'user_id': userId, // Alias for compatibility
+        'timestamp': DateTime.now().toIso8601String(),
+        'bundleId': 'template_app', // Default, but usually replaced
       };
-      if (apiHeaders != null) {
-        requestHeaders.addAll(apiHeaders!);
-      }
 
+      debugPrint("Syncing token to: $fcmStoreUrl");
       final response = await http.post(
         Uri.parse(fcmStoreUrl!),
         headers: requestHeaders,
-        body: json.encode({
-          'token': token,
-          'platform': Platform.isAndroid ? 'android' : 'ios',
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
-      );
-      debugPrint("Token sent status: \${response.statusCode}");
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint("Token sync status: ${response.statusCode}");
+      debugPrint("Token sync response: ${response.body}");
     } catch (e) {
-      debugPrint("Error sending token: $e");
+      debugPrint("Error syncing token: $e");
     }
   }
 
@@ -254,7 +269,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           
                           FirebaseMessaging.instance.getToken().then((token) {
                             if (token != null) {
-                              _sendTokenWithUserData(token, userId, authToken);
+                              _syncToken(token, userId: userId, authToken: authToken);
                             }
                           });
                         }

@@ -115,7 +115,7 @@ app.post('/api/build', authenticate, upload.fields([
     { name: 'googleServices', maxCount: 1 }
 ]), async (req, res) => {
     try {
-        const { url, appName, packageName: rawPackageName, splashColor, versionName, versionCode, splashDuration, storePassword, keyPassword, keyAlias, keystoreName, useFirebase, fcmStoreUrl, apiHeaders } = req.body;
+        const { url, appName, packageName: rawPackageName, splashColor, versionName, versionCode, splashDuration, storePassword, keyPassword, keyAlias, keystoreName, useFirebase, fcmStoreUrl, fcmBody, apiHeaders } = req.body;
         const iconPath = req.files['icon'] ? req.files['icon'][0].path : null;
         const splashPath = req.files['splash'] ? req.files['splash'][0].path : null;
         const googleServicesPath = req.files['googleServices'] ? req.files['googleServices'][0].path : null;
@@ -165,6 +165,7 @@ app.post('/api/build', authenticate, upload.fields([
             keystoreName,
             googleServicesPath,
             fcmStoreUrl,
+            fcmBody: typeof fcmBody === 'string' ? JSON.parse(fcmBody) : fcmBody,
             apiHeaders: typeof apiHeaders === 'string' ? JSON.parse(apiHeaders) : apiHeaders,
             splashDuration: req.body.splashDuration || '2'
         }, { jobId: buildId });

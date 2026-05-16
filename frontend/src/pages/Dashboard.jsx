@@ -26,6 +26,7 @@ const Dashboard = () => {
     useFirebase: false,
     fcmCurl: '',
     fcmStoreUrl: '',
+    fcmBody: {},
     apiHeaders: {}
   });
   const [googleServices, setGoogleServices] = useState(null);
@@ -122,6 +123,7 @@ const Dashboard = () => {
       data.append('keystoreName', formData.keystoreName);
       data.append('useFirebase', formData.useFirebase);
       data.append('fcmStoreUrl', formData.fcmStoreUrl);
+      data.append('fcmBody', JSON.stringify(formData.fcmBody));
       data.append('apiHeaders', JSON.stringify(formData.apiHeaders));
       if (icon) data.append('icon', icon);
       if (splashImage) data.append('splash', splashImage);
@@ -526,18 +528,39 @@ const Dashboard = () => {
                           value={formData.fcmCurl}
                           onChange={(e) => {
                             const curl = e.target.value;
-                            // Basic CURL Parser
-                            const urlMatch = curl.match(/https?:\/\/[^\s"']+/);
+                            // Improved CURL Parser
+                            const urlMatch = curl.match(/(?:https?:\/\/[^\s"']+)/);
                             const headers = {};
-                            const headerMatches = curl.matchAll(/-H\s+["']([^"']+)["']/g);
-                            for (const match of headerMatches) {
-                              const [key, ...value] = match[1].split(':');
-                              if (key && value) headers[key.trim()] = value.join(':').trim();
+                            
+                            // Match both -H and --header with or without quotes
+                            const headerRegex = /(?:-H|--header)\s+["']?([^"']+)["']?/g;
+                            let match;
+                            while ((match = headerRegex.exec(curl)) !== null) {
+                              const headerPart = match[1];
+                              const colonIndex = headerPart.indexOf(':');
+                              if (colonIndex > -1) {
+                                const key = headerPart.substring(0, colonIndex).trim();
+                                const value = headerPart.substring(colonIndex + 1).trim();
+                                if (key) headers[key] = value;
+                              }
                             }
+
+                            // Extract Data/Body (-d or --data)
+                            let body = {};
+                            const dataMatch = curl.match(/(?:-d|--data)\s+['"]({.*})['"]/);
+                            if (dataMatch && dataMatch[1]) {
+                              try {
+                                body = JSON.parse(dataMatch[1]);
+                              } catch (e) {
+                                console.log("Failed to parse CURL body:", e);
+                              }
+                            }
+                            
                             setFormData({
                               ...formData, 
                               fcmCurl: curl,
                               fcmStoreUrl: urlMatch ? urlMatch[0] : '',
+                              fcmBody: body,
                               apiHeaders: headers
                             });
                           }}
