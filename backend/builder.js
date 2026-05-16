@@ -290,15 +290,38 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
 
     if (await fs.pathExists(oldMainPath)) {
         let content = await fs.readFile(oldMainPath, 'utf8');
-        content = content.replace(/package\s+com\.example\.template_app/, `package ${packageName}`);
+        content = content.replace(/package\s+[\w\.]+/, `package ${packageName}`);
         
         await fs.ensureDir(newMainDir);
         await fs.writeFile(newMainPath, content);
         
-        // Remove old directory if it's different
-        if (oldPackagePath !== newPackagePath) {
-            await fs.remove(path.join(kotlinBaseDir, 'com/example'));
+        // Remove old directory safely (only if it's not a parent of the new one)
+        if (!newPackagePath.startsWith(oldPackagePath)) {
+            await fs.remove(path.join(kotlinBaseDir, 'com/example/template_app'));
+            // Optionally clean up empty parent dirs, but be careful
+        } else if (oldPackagePath !== newPackagePath) {
+            // If they overlap but aren't identical, we might have multiple MainActivities
+            // Best to just remove the old one specifically
+            if (await fs.pathExists(oldMainPath) && oldMainPath !== newMainPath) {
+                await fs.remove(oldMainPath);
+            }
         }
+    }
+
+    // 6. Generate local.properties (Crucial for Flutter builds)
+    const localPropsPath = path.join(buildDir, 'android/local.properties');
+    let flutterSdkPath = '';
+    try {
+        const { stdout } = await execPromise('flutter sdk-path');
+        flutterSdkPath = stdout.trim().replace(/\\/g, '/');
+    } catch (e) {
+        // Fallback to environment variable or common paths
+        flutterSdkPath = process.env.FLUTTER_ROOT || 'C:/flutter'; 
+    }
+    
+    if (flutterSdkPath) {
+        const propsContent = `flutter.sdk=${flutterSdkPath}\nflutter.versionName=1.0.0\nflutter.versionCode=1\nflutter.minSdkVersion=21\nflutter.targetSdkVersion=34\nflutter.compileSdkVersion=34\n`;
+        await fs.writeFile(localPropsPath, propsContent);
     }
 }
 
