@@ -165,8 +165,14 @@ app.post('/api/build', authenticate, upload.fields([
             keystoreName,
             googleServicesPath,
             fcmStoreUrl,
-            fcmBody: typeof fcmBody === 'string' ? JSON.parse(fcmBody) : fcmBody,
-            apiHeaders: typeof apiHeaders === 'string' ? JSON.parse(apiHeaders) : apiHeaders,
+            fcmBody: (() => {
+                try { return typeof fcmBody === 'string' ? JSON.parse(fcmBody) : fcmBody; }
+                catch (e) { return {}; }
+            })(),
+            apiHeaders: (() => {
+                try { return typeof apiHeaders === 'string' ? JSON.parse(apiHeaders) : apiHeaders; }
+                catch (e) { return {}; }
+            })(),
             splashDuration: req.body.splashDuration || '2'
         }, { jobId: buildId });
         res.json({ message: 'Build queued', jobId: job.id, build: newBuild });

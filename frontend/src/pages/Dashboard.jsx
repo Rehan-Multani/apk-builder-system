@@ -547,14 +547,17 @@ const Dashboard = () => {
 
                             // Extract Data/Body (-d or --data)
                             let body = {};
-                            const dataMatch = curl.match(/(?:-d|--data)\s+['"]([^'"]+)['"]/);
-                            if (dataMatch && dataMatch[1]) {
-                              const dataStr = dataMatch[1];
-                              if (dataStr.trim().startsWith('{')) {
+                            // Improved regex to handle multi-line data and escaped quotes
+                            const dataMatch = curl.match(/(?:-d|--data)\s+(['"])([\s\S]*?)(?<!\\)\1/);
+                            if (dataMatch && dataMatch[2]) {
+                              const dataStr = dataMatch[2].trim();
+                              if (dataStr.startsWith('{')) {
                                 try {
-                                  body = JSON.parse(dataStr);
+                                  // Clean up escaped quotes if they exist (common in shell commands)
+                                  const cleanData = dataStr.replace(/\\"/g, '"');
+                                  body = JSON.parse(cleanData);
                                 } catch (e) {
-                                  console.log("Failed to parse JSON body:", e);
+                                  // Silent fail during typing to avoid console noise
                                 }
                               } else {
                                 // Handle form-urlencoded: key1=val1&key2=val2
