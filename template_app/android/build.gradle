@@ -2,6 +2,9 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url "https://storage.googleapis.com/download.flutter.io"
+        }
     }
     dependencies {
         // Injection point for google-services classpath by builder.js

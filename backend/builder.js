@@ -136,6 +136,10 @@ async function buildAPK(data, updateStatus) {
         console.log(`[${buildId}] Fetching dependencies...`);
         await runBuild('flutter', ['pub', 'get']);
         
+        updateStatus(59);
+        console.log(`[${buildId}] Pre-caching Android engine artifacts...`);
+        await runBuild('flutter', ['precache', '--android']);
+        
         updateStatus(60);
         console.log(`[${buildId}] Building APK...`);
         await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons']);
