@@ -348,8 +348,9 @@ async function applyFirebasePlugins(buildDir) {
         let appGradle = await fs.readFile(appGradlePath, 'utf8');
         const plugin = "\napply plugin: 'com.google.gms.google-services'";
         if (!appGradle.includes('com.google.gms.google-services')) {
-            // Insert after the android application plugin for better compatibility
-            if (appGradle.includes("apply plugin: 'com.android.application'")) {
+            if (appGradle.includes("id \"com.android.application\"")) {
+                appGradle = appGradle.replace("id \"com.android.application\"", "id \"com.android.application\"" + "\n    id \"com.google.gms.google-services\"");
+            } else if (appGradle.includes("apply plugin: 'com.android.application'")) {
                 appGradle = appGradle.replace("apply plugin: 'com.android.application'", "apply plugin: 'com.android.application'" + plugin);
             } else {
                 appGradle += plugin;
