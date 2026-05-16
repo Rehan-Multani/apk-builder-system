@@ -4,15 +4,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // These are managed by settings.gradle for the project, 
-        // but we keep this block for backend injection of google-services.
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
+        // Injection point for google-services classpath by builder.js
     }
 }
 
