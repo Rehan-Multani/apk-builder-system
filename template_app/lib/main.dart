@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:collection';
 import 'package:flutter/material.dart';
@@ -15,36 +16,55 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  bool useFirebase = false;
-  try {
-    final String response = await rootBundle.loadString('assets/config.json');
-    final data = json.decode(response);
-    useFirebase = data['useFirebase'] ?? false;
-  } catch (_) {}
-
-  if (useFirebase) {
+void main() {
+  // Use a global error handler to prevent silent crashes
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    
+    bool useFirebase = false;
     try {
-      await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      final String response = await rootBundle.loadString('assets/config.json');
+      final data = json.decode(response);
+      useFirebase = data['useFirebase'] ?? false;
     } catch (e) {
-      debugPrint("Firebase initialization error: $e");
+      debugPrint("Config load error in main: $e");
     }
-  }
 
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+    if (useFirebase) {
+      try {
+        await Firebase.initializeApp();
+        FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      } catch (e) {
+        debugPrint("Firebase initialization error: $e");
+      }
+    }
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
 
-  runApp(const MyApp());
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    runApp(const MyApp());
+  }, (error, stack) {
+    debugPrint("CRITICAL STARTUP ERROR: $error");
+    debugPrint(stack.toString());
+    // Fallback app to show the error if possible
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text("App failed to start: $error", style: const TextStyle(color: Colors.red)),
+          ),
+        ),
+      ),
+    ));
+  });
 }
 
 class MyApp extends StatelessWidget {
