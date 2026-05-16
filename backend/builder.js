@@ -25,7 +25,7 @@ function getBuildEnv() {
  * Main function to build APK and AAB
  */
 async function buildAPK(data, updateStatus) {
-    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName, googleServicesPath, fcmStoreUrl, apiHeaders, splashDuration } = data;
+    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName, googleServicesPath, fcmStoreUrl, fcmBody, apiHeaders, splashDuration } = data;
     const baseDir = path.join(__dirname, '../');
     const templateDir = path.join(baseDir, 'template_app');
     const buildDir = path.join(baseDir, 'builds', buildId);

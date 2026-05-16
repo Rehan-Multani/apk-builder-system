@@ -547,12 +547,21 @@ const Dashboard = () => {
 
                             // Extract Data/Body (-d or --data)
                             let body = {};
-                            const dataMatch = curl.match(/(?:-d|--data)\s+['"]({.*})['"]/);
+                            const dataMatch = curl.match(/(?:-d|--data)\s+['"]([^'"]+)['"]/);
                             if (dataMatch && dataMatch[1]) {
-                              try {
-                                body = JSON.parse(dataMatch[1]);
-                              } catch (e) {
-                                console.log("Failed to parse CURL body:", e);
+                              const dataStr = dataMatch[1];
+                              if (dataStr.trim().startsWith('{')) {
+                                try {
+                                  body = JSON.parse(dataStr);
+                                } catch (e) {
+                                  console.log("Failed to parse JSON body:", e);
+                                }
+                              } else {
+                                // Handle form-urlencoded: key1=val1&key2=val2
+                                dataStr.split('&').forEach(pair => {
+                                  const [k, v] = pair.split('=');
+                                  if (k) body[k.trim()] = v ? decodeURIComponent(v.trim()) : '';
+                                });
                               }
                             }
                             

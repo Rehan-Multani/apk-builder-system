@@ -193,39 +193,55 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _syncToken(String token, {String? userId, String? authToken}) async {
     try {
-      if (fcmStoreUrl == null || fcmStoreUrl!.isEmpty) return;
+      if (fcmStoreUrl == null || fcmStoreUrl!.trim().isEmpty) return;
+      final cleanUrl = fcmStoreUrl!.trim();
 
       Map<String, String> requestHeaders = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'User-Agent': 'Flutter-WebToAPK-App',
       };
       
-      // Priority 1: Auth token from JS handler
-      // Priority 2: API Headers from config (CURL)
-      if (authToken != null && authToken.isNotEmpty) {
-        requestHeaders['Authorization'] = 'Bearer $authToken';
-      } else if (apiHeaders != null) {
-        requestHeaders.addAll(apiHeaders!);
+      if (apiHeaders != null) {
+        // This will include Content-Type if present in the CURL
+        apiHeaders!.forEach((key, value) {
+          requestHeaders[key] = value;
+        });
       }
 
-      final body = {
+      if (authToken != null && authToken.isNotEmpty) {
+        requestHeaders['Authorization'] = 'Bearer $authToken';
+      }
+
+      final Map<String, dynamic> bodyData = {
         if (fcmBody != null) ...fcmBody!,
         'token': token,
-        'fcmToken': token, // Alias for compatibility
-        'fcm_token': token, // Alias for compatibility
+        'fcmToken': token,
+        'fcm_token': token,
         'platform': Platform.isAndroid ? 'android' : 'ios',
         'userId': userId,
-        'user_id': userId, // Alias for compatibility
+        'user_id': userId,
         'timestamp': DateTime.now().toIso8601String(),
-        'bundleId': 'template_app', // Default, but usually replaced
+        'bundleId': 'template_app',
       };
 
-      debugPrint("Syncing token to: $fcmStoreUrl");
+      debugPrint("Syncing token to: $cleanUrl");
+      debugPrint("Headers: $requestHeaders");
+
+      dynamic finalBody;
+      bool isFormData = requestHeaders['Content-Type']?.contains('application/x-www-form-urlencoded') ?? false;
+
+      if (isFormData) {
+        finalBody = bodyData.map((key, value) => MapEntry(key, value?.toString() ?? ''));
+      } else {
+        finalBody = json.encode(bodyData);
+      }
+
       final response = await http.post(
-        Uri.parse(fcmStoreUrl!),
+        Uri.parse(cleanUrl),
         headers: requestHeaders,
-        body: json.encode(body),
-      ).timeout(const Duration(seconds: 15));
+        body: finalBody,
+      ).timeout(const Duration(seconds: 20));
 
       debugPrint("Token sync status: ${response.statusCode}");
       debugPrint("Token sync response: ${response.body}");
