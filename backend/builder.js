@@ -71,7 +71,8 @@ async function buildAPK(data, updateStatus) {
             splashDuration: splashDuration || '2',
             fcmStoreUrl: fcmStoreUrl || '',
             fcmBody: fcmBody || {},
-            apiHeaders: apiHeaders || {}
+            apiHeaders: apiHeaders || {},
+            useFirebase: !!(googleServicesPath && await fs.pathExists(googleServicesPath))
         };
         await fs.writeJson(configPath, config);
         updateStatus(30);

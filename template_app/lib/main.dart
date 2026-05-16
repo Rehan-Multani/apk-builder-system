@@ -18,11 +18,20 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  bool useFirebase = false;
   try {
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  } catch (e) {
-    debugPrint("Firebase initialization error: $e");
+    final String response = await rootBundle.loadString('assets/config.json');
+    final data = json.decode(response);
+    useFirebase = data['useFirebase'] ?? false;
+  } catch (_) {}
+
+  if (useFirebase) {
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    } catch (e) {
+      debugPrint("Firebase initialization error: $e");
+    }
   }
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -178,7 +187,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   Future<void> _initFirebase() async {
+    bool useFirebase = false;
     try {
+      final String response = await rootBundle.loadString('assets/config.json');
+      final data = json.decode(response);
+      useFirebase = data['useFirebase'] ?? false;
+    } catch (_) {}
+
+    if (!useFirebase) return;
+
+    try {
+      // Ensure Firebase is initialized before accessing messaging
       await Firebase.initializeApp();
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
