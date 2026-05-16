@@ -44,6 +44,18 @@ async function buildAPK(data, updateStatus) {
 
         // 2. Handle Google Services JSON
         if (googleServicesPath && await fs.pathExists(googleServicesPath)) {
+            try {
+                const googleServices = await fs.readJson(googleServicesPath);
+                const packageNames = googleServices.client.map(c => c.client_info.android_client_info.package_name);
+                
+                if (!packageNames.includes(packageName)) {
+                    throw new Error(`Firebase Package Name Mismatch!\nDashboard: ${packageName}\nJSON contains: ${packageNames.join(', ')}\n\nPlease ensure your Package Name matches exactly what you configured in Firebase Console.`);
+                }
+            } catch (e) {
+                if (e.message.includes('Firebase Package Name Mismatch')) throw e;
+                console.error("Error validating google-services.json:", e);
+            }
+
             const destPath = path.join(buildDir, 'android/app/google-services.json');
             await fs.copy(googleServicesPath, destPath);
             await applyFirebasePlugins(buildDir);
