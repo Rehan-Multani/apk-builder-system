@@ -133,7 +133,13 @@ async function buildAPK(data, updateStatus) {
         // Aggressive cleanup to prevent stale cache/plugin issues
         await fs.remove(path.join(buildDir, '.dart_tool'));
         await fs.remove(path.join(buildDir, 'pubspec.lock'));
+        await fs.remove(path.join(buildDir, 'build'));
         await fs.remove(path.join(buildDir, 'android/.gradle'));
+        await fs.remove(path.join(buildDir, 'android/app/build'));
+        // Force regeneration of plugin registrant
+        await fs.remove(path.join(buildDir, 'android/app/src/main/java/io/flutter/plugins'));
+        await fs.remove(path.join(buildDir, 'android/app/src/main/kotlin/io/flutter/plugins'));
+        
         await runBuild('flutter', ['clean']);
 
         updateStatus(58);
