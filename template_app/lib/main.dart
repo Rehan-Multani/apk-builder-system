@@ -24,6 +24,14 @@ void main() async {
     debugPrint("Firebase initialization error: $e");
   }
 
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.black,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
   runApp(const MyApp());
 }
 
@@ -131,6 +139,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
         String colorHex = data['splashColor']?.toString().replaceAll('#', '') ?? 'ffffff';
         splashColor = Color(int.parse('FF$colorHex', radix: 16));
         isConfigLoaded = true;
+        
+        // Adjust status bar icons based on background color
+        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light,
+          statusBarBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.light : Brightness.dark,
+        ));
       });
 
       _initFirebase();
@@ -257,6 +272,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       useWideViewPort: true,
                       loadWithOverviewMode: true,
                       hardwareAcceleration: true,
+                      verticalScrollBarEnabled: false,
+                      horizontalScrollBarEnabled: false,
+                      overScrollMode: OverScrollMode.NEVER,
+                      transparentBackground: true,
                     ),
                     onWebViewCreated: (controller) {
                       webViewController = controller;
@@ -307,13 +326,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   ),
                 ),
               
-              if (isSplashFinished && progress < 1.0 && !isOffline)
-                LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Colors.transparent,
-                  valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).primaryColor),
-                ),
-
+              // Progress bar removed as requested (top scroller)
+              
               if (isOffline && isSplashFinished)
                 Container(
                   color: Colors.white,
