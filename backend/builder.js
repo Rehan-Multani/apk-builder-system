@@ -279,6 +279,27 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         strings = strings.replace(/<string name="app_name">[^<]*<\/string>/, `<string name="app_name">${appName}</string>`);
         await fs.writeFile(stringsPath, strings);
     }
+
+    // 5. Update MainActivity.kt (Path and Package)
+    const oldPackagePath = 'com/example/template_app';
+    const newPackagePath = packageName.replace(/\./g, '/');
+    const kotlinBaseDir = path.join(buildDir, 'android/app/src/main/kotlin');
+    const oldMainPath = path.join(kotlinBaseDir, oldPackagePath, 'MainActivity.kt');
+    const newMainDir = path.join(kotlinBaseDir, newPackagePath);
+    const newMainPath = path.join(newMainDir, 'MainActivity.kt');
+
+    if (await fs.pathExists(oldMainPath)) {
+        let content = await fs.readFile(oldMainPath, 'utf8');
+        content = content.replace(/package\s+com\.example\.template_app/, `package ${packageName}`);
+        
+        await fs.ensureDir(newMainDir);
+        await fs.writeFile(newMainPath, content);
+        
+        // Remove old directory if it's different
+        if (oldPackagePath !== newPackagePath) {
+            await fs.remove(path.join(kotlinBaseDir, 'com/example'));
+        }
+    }
 }
 
 /**
