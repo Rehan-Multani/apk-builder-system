@@ -16,6 +16,14 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint("Firebase initialization error: $e");
+  }
+
   runApp(const MyApp());
 }
 
@@ -129,9 +137,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _initFirebase() async {
     try {
-      await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-      
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
       await messaging.subscribeToTopic('all');

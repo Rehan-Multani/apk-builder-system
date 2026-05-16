@@ -219,6 +219,7 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
@@ -334,7 +335,8 @@ async function applyFirebasePlugins(buildDir) {
         let rootGradle = await fs.readFile(rootGradlePath, 'utf8');
         const classpath = "        classpath 'com.google.gms:google-services:4.4.0'";
         if (!rootGradle.includes('google-services')) {
-            rootGradle = rootGradle.replace('dependencies {', `dependencies {\n${classpath}`);
+            // Target the buildscript dependencies block specifically
+            rootGradle = rootGradle.replace(/(buildscript\s*\{[\s\S]*?dependencies\s*\{)/, `$1\n${classpath}`);
             await fs.writeFile(rootGradlePath, rootGradle);
         }
     }
@@ -345,7 +347,12 @@ async function applyFirebasePlugins(buildDir) {
         let appGradle = await fs.readFile(appGradlePath, 'utf8');
         const plugin = "\napply plugin: 'com.google.gms.google-services'";
         if (!appGradle.includes('com.google.gms.google-services')) {
-            appGradle += plugin;
+            // Insert after the android application plugin for better compatibility
+            if (appGradle.includes("apply plugin: 'com.android.application'")) {
+                appGradle = appGradle.replace("apply plugin: 'com.android.application'", "apply plugin: 'com.android.application'" + plugin);
+            } else {
+                appGradle += plugin;
+            }
             await fs.writeFile(appGradlePath, appGradle);
         }
     }
