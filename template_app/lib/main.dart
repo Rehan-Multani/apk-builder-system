@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -28,9 +29,11 @@ void main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.black,
+    systemNavigationBarColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.light,
   ));
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   runApp(const MyApp());
 }
@@ -265,14 +268,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: splashColor ?? Colors.white,
-        body: SafeArea(
-          child: Stack(
-            children: [
-              if (isConfigLoaded && targetUrl != null)
-                Opacity(
-                  opacity: isSplashFinished ? 1.0 : 0.01,
-                  child: InAppWebView(
+        backgroundColor: splashColor ?? Colors.black,
+        body: Stack(
+          children: [
+            if (isConfigLoaded && targetUrl != null)
+              Opacity(
+                opacity: isSplashFinished ? 1.0 : 0.01,
+                child: InAppWebView(
                     initialUrlRequest: URLRequest(url: WebUri(targetUrl!)),
                     pullToRefreshController: pullToRefreshController,
                     initialSettings: InAppWebViewSettings(
@@ -292,10 +294,36 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       horizontalScrollBarEnabled: false,
                       overScrollMode: OverScrollMode.NEVER,
                       transparentBackground: true,
+                      disableVerticalScroll: false,
+                      disableHorizontalScroll: false,
                     ),
+                    initialUserScripts: UnmodifiableListView<UserScript>([
+                      UserScript(
+                        source: """
+                          var style = document.createElement('style');
+                          style.innerHTML = '::-webkit-scrollbar { display: none !important; } * { -ms-overflow-style: none !important; scrollbar-width: none !important; }';
+                          document.head.appendChild(style);
+                          
+                          // Also try to prevent pull-to-refresh overscroll glow if possible
+                          document.documentElement.style.overscrollBehavior = 'none';
+                          document.body.style.overscrollBehavior = 'none';
+                        """,
+                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                      ),
+                    ]),
                     onWebViewCreated: (controller) {
                       webViewController = controller;
                       
+                      controller.addJavaScriptHandler(handlerName: 'setStatusBar', callback: (args) {
+                        if (args.isNotEmpty) {
+                          final isDark = args[0] as bool;
+                          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+                            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+                            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+                          ));
+                        }
+                      });
+
                       controller.addJavaScriptHandler(handlerName: 'syncUserToken', callback: (args) {
                         if (args.isNotEmpty) {
                           final data = args[0];
