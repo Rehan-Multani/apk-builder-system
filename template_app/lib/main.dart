@@ -130,7 +130,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
       final data = await json.decode(response);
       
       setState(() {
-        targetUrl = data['url'];
+        String url = data['url']?.toString() ?? '';
+        if (url.isNotEmpty && !url.startsWith('http')) {
+          url = 'https://$url';
+        }
+        targetUrl = url;
+
         fcmStoreUrl = data['fcmStoreUrl'];
         if (data['fcmBody'] != null) {
           fcmBody = Map<String, dynamic>.from(data['fcmBody']);
@@ -140,15 +145,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
         }
         splashDuration = int.tryParse(data['splashDuration']?.toString() ?? '2') ?? 2;
         String colorHex = data['splashColor']?.toString().replaceAll('#', '') ?? 'ffffff';
-        splashColor = Color(int.parse('FF$colorHex', radix: 16));
+        try {
+          splashColor = Color(int.parse('FF$colorHex', radix: 16));
+        } catch (e) {
+          splashColor = Colors.white;
+        }
         isConfigLoaded = true;
         
         // Adjust status bar icons based on background color
-        SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light,
-          statusBarBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.light : Brightness.dark,
-        ));
+        if (splashColor != null) {
+          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light,
+            statusBarBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.light : Brightness.dark,
+          ));
+        }
       });
 
       _initFirebase();
@@ -168,6 +179,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   Future<void> _initFirebase() async {
     try {
+      await Firebase.initializeApp();
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
       
@@ -225,7 +237,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         'userId': userId,
         'user_id': userId,
         'timestamp': DateTime.now().toIso8601String(),
-        'bundleId': 'template_app',
       };
 
       debugPrint("Syncing token to: $cleanUrl");
@@ -408,10 +419,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Image.asset(
-                          'assets/launch_image.png',
+                          'assets/splash.png',
                           width: 150,
                           height: 150,
-                          errorBuilder: (context, error, stackTrace) => const SizedBox(),
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.asset(
+                              'assets/launch_image.png',
+                              width: 150,
+                              height: 150,
+                              errorBuilder: (c, e, s) => const Icon(Icons.language, size: 80, color: Colors.indigo),
+                            );
+                          },
                         ),
                         const SizedBox(height: 24),
                         CircularProgressIndicator(
