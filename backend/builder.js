@@ -280,30 +280,40 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         await fs.writeFile(stringsPath, strings);
     }
 
-    // 5. Update MainActivity.kt (Path and Package)
+    // 5. Update MainActivity (Path and Package) - Supports both Kotlin and Java
     const oldPackagePath = 'com/example/template_app';
     const newPackagePath = packageName.replace(/\./g, '/');
-    const kotlinBaseDir = path.join(buildDir, 'android/app/src/main/kotlin');
-    const oldMainPath = path.join(kotlinBaseDir, oldPackagePath, 'MainActivity.kt');
-    const newMainDir = path.join(kotlinBaseDir, newPackagePath);
-    const newMainPath = path.join(newMainDir, 'MainActivity.kt');
+    const mainSrcDir = path.join(buildDir, 'android/app/src/main');
+    
+    const possiblePaths = [
+        { dir: 'kotlin', ext: 'kt' },
+        { dir: 'java', ext: 'java' }
+    ];
 
-    if (await fs.pathExists(oldMainPath)) {
-        let content = await fs.readFile(oldMainPath, 'utf8');
-        content = content.replace(/package\s+[\w\.]+/, `package ${packageName}`);
-        
-        await fs.ensureDir(newMainDir);
-        await fs.writeFile(newMainPath, content);
-        
-        // Remove old directory safely (only if it's not a parent of the new one)
-        if (!newPackagePath.startsWith(oldPackagePath)) {
-            await fs.remove(path.join(kotlinBaseDir, 'com/example/template_app'));
-            // Optionally clean up empty parent dirs, but be careful
-        } else if (oldPackagePath !== newPackagePath) {
-            // If they overlap but aren't identical, we might have multiple MainActivities
-            // Best to just remove the old one specifically
-            if (await fs.pathExists(oldMainPath) && oldMainPath !== newMainPath) {
+    for (const p of possiblePaths) {
+        const oldMainPath = path.join(mainSrcDir, p.dir, oldPackagePath, `MainActivity.${p.ext}`);
+        if (await fs.pathExists(oldMainPath)) {
+            const newMainDir = path.join(mainSrcDir, p.dir, newPackagePath);
+            const newMainPath = path.join(newMainDir, `MainActivity.${p.ext}`);
+            
+            let content = await fs.readFile(oldMainPath, 'utf8');
+            // More robust package replacement
+            content = content.replace(/package\s+[a-zA-Z0-9._]+/, `package ${packageName}`);
+            
+            await fs.ensureDir(newMainDir);
+            await fs.writeFile(newMainPath, content);
+            
+            // Remove old file specifically to avoid deleting the whole tree if it's shared
+            if (oldMainPath !== newMainPath) {
                 await fs.remove(oldMainPath);
+                // Clean up old package folders if empty
+                try {
+                    let currentDir = path.dirname(oldMainPath);
+                    while (currentDir.includes(p.dir) && (await fs.readdir(currentDir)).length === 0) {
+                        await fs.remove(currentDir);
+                        currentDir = path.dirname(currentDir);
+                    }
+                } catch (e) {}
             }
         }
     }
@@ -326,8 +336,7 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
             `flutter.versionCode=${versionCode || '1'}`,
             `flutter.minSdkVersion=21`,
             `flutter.targetSdkVersion=34`,
-            `flutter.compileSdkVersion=34`,
-            `sdk.dir=${flutterSdkPath}/../../` // Some tools look for this
+            `flutter.compileSdkVersion=34`
         ].join('\n') + '\n';
         await fs.writeFile(localPropsPath, propsContent);
     }
