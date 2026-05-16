@@ -130,6 +130,10 @@ async function buildAPK(data, updateStatus) {
         
         updateStatus(56);
         console.log(`[${buildId}] Cleaning build artifacts...`);
+        // Aggressive cleanup to prevent stale cache/plugin issues
+        await fs.remove(path.join(buildDir, '.dart_tool'));
+        await fs.remove(path.join(buildDir, 'pubspec.lock'));
+        await fs.remove(path.join(buildDir, 'android/.gradle'));
         await runBuild('flutter', ['clean']);
 
         updateStatus(58);
