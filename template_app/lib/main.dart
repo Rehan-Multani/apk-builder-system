@@ -102,7 +102,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
         HapticFeedback.mediumImpact();
       },
     );
+  }
 
+  void _setupFirebaseListeners() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +116,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       }
     });
 
-    // Listen for token refresh
     FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
       debugPrint("FCM Token Refreshed: $newToken");
       if (fcmStoreUrl != null && fcmStoreUrl!.isNotEmpty) {
@@ -199,6 +200,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     try {
       // Ensure Firebase is initialized before accessing messaging
       await Firebase.initializeApp();
+      _setupFirebaseListeners();
       FirebaseMessaging messaging = FirebaseMessaging.instance;
       await messaging.requestPermission(alert: true, badge: true, sound: true);
       
