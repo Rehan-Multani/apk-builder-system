@@ -315,12 +315,20 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         const { stdout } = await execPromise('flutter sdk-path');
         flutterSdkPath = stdout.trim().replace(/\\/g, '/');
     } catch (e) {
-        // Fallback to environment variable or common paths
         flutterSdkPath = process.env.FLUTTER_ROOT || 'C:/flutter'; 
     }
     
     if (flutterSdkPath) {
-        const propsContent = `flutter.sdk=${flutterSdkPath}\nflutter.versionName=1.0.0\nflutter.versionCode=1\nflutter.minSdkVersion=21\nflutter.targetSdkVersion=34\nflutter.compileSdkVersion=34\n`;
+        // Ensure the path is escaped for Windows if necessary, but on Linux / is fine
+        const propsContent = [
+            `flutter.sdk=${flutterSdkPath}`,
+            `flutter.versionName=${versionName || '1.0.0'}`,
+            `flutter.versionCode=${versionCode || '1'}`,
+            `flutter.minSdkVersion=21`,
+            `flutter.targetSdkVersion=34`,
+            `flutter.compileSdkVersion=34`,
+            `sdk.dir=${flutterSdkPath}/../../` // Some tools look for this
+        ].join('\n') + '\n';
         await fs.writeFile(localPropsPath, propsContent);
     }
 }
