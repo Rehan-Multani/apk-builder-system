@@ -303,51 +303,46 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         await fs.writeFile(colorsPath, colors);
     }
 
-    // 5. Update MainActivity (Path and Package) - Supports both Kotlin and Java
-    const oldPackagePath = 'com/example/template_app';
-    const newPackagePath = packageName.replace(/\./g, '/');
+    // 5. Update MainActivity (Pristine generation from scratch to avoid any template duplication or redeclaration conflicts)
     const mainSrcDir = path.join(buildDir, 'android/app/src/main');
-    
-    // Prevent duplicate class redeclaration by choosing only one MainActivity (Kotlin takes priority)
-    const hasKotlin = await fs.pathExists(path.join(mainSrcDir, 'kotlin', oldPackagePath, 'MainActivity.kt'));
-    const hasJava = await fs.pathExists(path.join(mainSrcDir, 'java', oldPackagePath, 'MainActivity.java'));
-    if (hasKotlin && hasJava) {
-        console.log("Both Java and Kotlin MainActivity templates found. Deleting Java version to avoid Redeclaration compiler errors.");
-        await fs.remove(path.join(mainSrcDir, 'java', oldPackagePath, 'MainActivity.java'));
-    }
+    const javaSrcDir = path.join(mainSrcDir, 'java');
+    const kotlinSrcDir = path.join(mainSrcDir, 'kotlin');
 
-    const possiblePaths = [
-        { dir: 'kotlin', ext: 'kt' },
-        { dir: 'java', ext: 'java' }
-    ];
-
-    for (const p of possiblePaths) {
-        const oldMainPath = path.join(mainSrcDir, p.dir, oldPackagePath, `MainActivity.${p.ext}`);
-        if (await fs.pathExists(oldMainPath)) {
-            const newMainDir = path.join(mainSrcDir, p.dir, newPackagePath);
-            const newMainPath = path.join(newMainDir, `MainActivity.${p.ext}`);
-            
-            let content = await fs.readFile(oldMainPath, 'utf8');
-            // More robust package replacement
-            content = content.replace(/package\s+[a-zA-Z0-9._]+/, `package ${packageName}`);
-            
-            await fs.ensureDir(newMainDir);
-            await fs.writeFile(newMainPath, content);
-            
-            // Remove old file specifically to avoid deleting the whole tree if it's shared
-            if (oldMainPath !== newMainPath) {
-                await fs.remove(oldMainPath);
-                // Clean up old package folders if empty
+    async function cleanOldMainActivities(dir) {
+        if (!(await fs.pathExists(dir))) return;
+        const files = await fs.readdir(dir);
+        for (const file of files) {
+            const filePath = path.join(dir, file);
+            const stat = await fs.stat(filePath);
+            if (stat.isDirectory()) {
+                await cleanOldMainActivities(filePath);
                 try {
-                    let currentDir = path.dirname(oldMainPath);
-                    while (currentDir.includes(p.dir) && (await fs.readdir(currentDir)).length === 0) {
-                        await fs.remove(currentDir);
-                        currentDir = path.dirname(currentDir);
+                    if ((await fs.readdir(filePath)).length === 0) {
+                        await fs.remove(filePath);
                     }
                 } catch (e) {}
+            } else if (file === 'MainActivity.java' || file === 'MainActivity.kt') {
+                await fs.remove(filePath);
             }
         }
     }
+
+    await cleanOldMainActivities(javaSrcDir);
+    await cleanOldMainActivities(kotlinSrcDir);
+
+    // Generate pristine Kotlin MainActivity under the new package namespace
+    const newPackagePath = packageName.replace(/\./g, '/');
+    const targetKotlinDir = path.join(kotlinSrcDir, newPackagePath);
+    await fs.ensureDir(targetKotlinDir);
+    
+    const pristineKotlinContent = `package ${packageName}
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity: FlutterActivity() {
+}
+`;
+    await fs.writeFile(path.join(targetKotlinDir, 'MainActivity.kt'), pristineKotlinContent);
 
     // 6. Generate local.properties (Crucial for Flutter builds)
     const localPropsPath = path.join(buildDir, 'android/local.properties');
