@@ -27,7 +27,10 @@ const Dashboard = () => {
     fcmCurl: '',
     fcmStoreUrl: '',
     fcmBody: {},
-    apiHeaders: {}
+    apiHeaders: {},
+    useSafeArea: true,
+    safeAreaTop: true,
+    safeAreaBottom: false
   });
   const [googleServices, setGoogleServices] = useState(null);
   const [firebaseAdmin, setFirebaseAdmin] = useState(null);
@@ -125,6 +128,9 @@ const Dashboard = () => {
       data.append('fcmStoreUrl', formData.fcmStoreUrl);
       data.append('fcmBody', JSON.stringify(formData.fcmBody));
       data.append('apiHeaders', JSON.stringify(formData.apiHeaders));
+      data.append('useSafeArea', formData.useSafeArea);
+      data.append('safeAreaTop', formData.safeAreaTop);
+      data.append('safeAreaBottom', formData.safeAreaBottom);
       if (icon) data.append('icon', icon);
       if (splashImage) data.append('splash', splashImage);
       if (googleServices) data.append('googleServices', googleServices);
@@ -359,7 +365,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              {/* Row 3: Versioning & Privacy */}
+              {/* Row 3: Versioning & Safe Area */}
               <div className="grid md:grid-cols-3 gap-6 border-t border-slate-800 pt-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-400">Version Name</label>
@@ -383,7 +389,52 @@ const Dashboard = () => {
                     />
                   </div>
                 </div>
+                <div className="space-y-2 flex flex-col justify-center min-h-[70px]">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="useSafeArea"
+                      className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-indigo-500"
+                      checked={formData.useSafeArea}
+                      onChange={(e) => setFormData({...formData, useSafeArea: e.target.checked})}
+                    />
+                    <label htmlFor="useSafeArea" className="text-sm font-medium text-white flex items-center gap-1.5 cursor-pointer">
+                      <ShieldCheck size={16} className="text-indigo-500" /> Enable Safe Area
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-slate-500 pl-6">Avoids overlapping with camera notch & status bar.</p>
+                </div>
               </div>
+
+              {/* Conditional Safe Area Options */}
+              {formData.useSafeArea && (
+                <div className="grid md:grid-cols-2 gap-4 bg-slate-900/30 p-4 rounded-2xl border border-slate-800/50 animate-slide-up">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="safeAreaTop"
+                      className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-indigo-500"
+                      checked={formData.safeAreaTop}
+                      onChange={(e) => setFormData({...formData, safeAreaTop: e.target.checked})}
+                    />
+                    <label htmlFor="safeAreaTop" className="text-xs text-slate-400 cursor-pointer flex items-center gap-1">
+                      Protect Top (Avoid status bar & camera notch overlap)
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="safeAreaBottom"
+                      className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-indigo-500"
+                      checked={formData.safeAreaBottom}
+                      onChange={(e) => setFormData({...formData, safeAreaBottom: e.target.checked})}
+                    />
+                    <label htmlFor="safeAreaBottom" className="text-xs text-slate-400 cursor-pointer flex items-center gap-1">
+                      Protect Bottom (Avoid system gesture bar overlap)
+                    </label>
+                  </div>
+                </div>
+              )}
 
               {/* Row 4: Icon Upload (Simplified) */}
               <div className="grid md:grid-cols-1 border-t border-slate-800 pt-8">

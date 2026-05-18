@@ -104,6 +104,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool isSplashFinished = false;
   bool isConfigLoaded = false;
   bool isOffline = false;
+  bool useSafeArea = true;
+  bool safeAreaTop = true;
+  bool safeAreaBottom = false;
 
   @override
   void initState() {
@@ -183,6 +186,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
         } catch (e) {
           splashColor = Colors.white;
         }
+
+        // Load Safe Area configurations with bulletproof defaults
+        useSafeArea = data['useSafeArea'] != null
+            ? (data['useSafeArea'] == true || data['useSafeArea'] == 'true')
+            : true;
+        safeAreaTop = data['safeAreaTop'] != null
+            ? (data['safeAreaTop'] == true || data['safeAreaTop'] == 'true')
+            : true;
+        safeAreaBottom = data['safeAreaBottom'] != null
+            ? (data['safeAreaBottom'] == true || data['safeAreaBottom'] == 'true')
+            : false;
+
         isConfigLoaded = true;
         
         // Adjust status bar icons based on background color
@@ -318,6 +333,103 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return true;
   }
 
+  Widget _buildWebViewBody() {
+    return InAppWebView(
+      initialUrlRequest: URLRequest(url: WebUri(targetUrl!)),
+      pullToRefreshController: pullToRefreshController,
+      initialSettings: InAppWebViewSettings(
+        javaScriptEnabled: true,
+        cacheEnabled: true,
+        useHybridComposition: true,
+        supportZoom: false,
+        allowsInlineMediaPlayback: true,
+        javaScriptCanOpenWindowsAutomatically: true,
+        mediaPlaybackRequiresUserGesture: false,
+        preferredContentMode: UserPreferredContentMode.MOBILE,
+        cacheMode: CacheMode.LOAD_DEFAULT,
+        useWideViewPort: true,
+        loadWithOverviewMode: true,
+        hardwareAcceleration: true,
+        verticalScrollBarEnabled: false,
+        horizontalScrollBarEnabled: false,
+        overScrollMode: OverScrollMode.NEVER,
+        transparentBackground: true,
+        disableVerticalScroll: false,
+        disableHorizontalScroll: false,
+      ),
+      initialUserScripts: UnmodifiableListView<UserScript>([
+        UserScript(
+          source: """
+            var style = document.createElement('style');
+            style.innerHTML = '::-webkit-scrollbar { display: none !important; } * { -ms-overflow-style: none !important; scrollbar-width: none !important; }';
+            document.head.appendChild(style);
+            
+            // Also try to prevent pull-to-refresh overscroll glow if possible
+            document.documentElement.style.overscrollBehavior = 'none';
+            document.body.style.overscrollBehavior = 'none';
+          """,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+        ),
+      ]),
+      onWebViewCreated: (controller) {
+        webViewController = controller;
+        
+        controller.addJavaScriptHandler(handlerName: 'setStatusBar', callback: (args) {
+          if (args.isNotEmpty) {
+            final isDark = args[0] as bool;
+            SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+              statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+              statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+            ));
+          }
+        });
+
+        controller.addJavaScriptHandler(handlerName: 'syncUserToken', callback: (args) {
+          if (args.isNotEmpty) {
+            final data = args[0];
+            final userId = data['userId']?.toString();
+            final authToken = data['authToken']?.toString();
+            
+            FirebaseMessaging.instance.getToken().then((token) {
+              if (token != null) {
+                _syncToken(token, userId: userId, authToken: authToken);
+              }
+            });
+          }
+        });
+      },
+      onPermissionRequest: (controller, request) async {
+        return PermissionResponse(
+          resources: request.resources,
+          action: PermissionResponseAction.GRANT,
+        );
+      },
+      onGeolocationPermissionsShowPrompt: (controller, origin) async {
+        return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: true);
+      },
+      onProgressChanged: (controller, progress) {
+        if (progress == 100) pullToRefreshController?.endRefreshing();
+        setState(() {
+          this.progress = progress / 100;
+          if (progress > 50) isOffline = false;
+        });
+      },
+      onReceivedError: (controller, request, error) {
+        if (request.isForMainFrame == true) setState(() => isOffline = true);
+      },
+      shouldOverrideUrlLoading: (controller, navigationAction) async {
+        var uri = navigationAction.request.url!;
+        if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            return NavigationActionPolicy.CANCEL;
+          }
+        }
+        return NavigationActionPolicy.ALLOW;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -329,101 +441,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
             if (isConfigLoaded && targetUrl != null)
               Opacity(
                 opacity: isSplashFinished ? 1.0 : 0.01,
-                child: InAppWebView(
-                    initialUrlRequest: URLRequest(url: WebUri(targetUrl!)),
-                    pullToRefreshController: pullToRefreshController,
-                    initialSettings: InAppWebViewSettings(
-                      javaScriptEnabled: true,
-                      cacheEnabled: true,
-                      useHybridComposition: true,
-                      supportZoom: false,
-                      allowsInlineMediaPlayback: true,
-                      javaScriptCanOpenWindowsAutomatically: true,
-                      mediaPlaybackRequiresUserGesture: false,
-                      preferredContentMode: UserPreferredContentMode.MOBILE,
-                      cacheMode: CacheMode.LOAD_DEFAULT,
-                      useWideViewPort: true,
-                      loadWithOverviewMode: true,
-                      hardwareAcceleration: true,
-                      verticalScrollBarEnabled: false,
-                      horizontalScrollBarEnabled: false,
-                      overScrollMode: OverScrollMode.NEVER,
-                      transparentBackground: true,
-                      disableVerticalScroll: false,
-                      disableHorizontalScroll: false,
-                    ),
-                    initialUserScripts: UnmodifiableListView<UserScript>([
-                      UserScript(
-                        source: """
-                          var style = document.createElement('style');
-                          style.innerHTML = '::-webkit-scrollbar { display: none !important; } * { -ms-overflow-style: none !important; scrollbar-width: none !important; }';
-                          document.head.appendChild(style);
-                          
-                          // Also try to prevent pull-to-refresh overscroll glow if possible
-                          document.documentElement.style.overscrollBehavior = 'none';
-                          document.body.style.overscrollBehavior = 'none';
-                        """,
-                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-                      ),
-                    ]),
-                    onWebViewCreated: (controller) {
-                      webViewController = controller;
-                      
-                      controller.addJavaScriptHandler(handlerName: 'setStatusBar', callback: (args) {
-                        if (args.isNotEmpty) {
-                          final isDark = args[0] as bool;
-                          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-                            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-                            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-                          ));
-                        }
-                      });
-
-                      controller.addJavaScriptHandler(handlerName: 'syncUserToken', callback: (args) {
-                        if (args.isNotEmpty) {
-                          final data = args[0];
-                          final userId = data['userId']?.toString();
-                          final authToken = data['authToken']?.toString();
-                          
-                          FirebaseMessaging.instance.getToken().then((token) {
-                            if (token != null) {
-                              _syncToken(token, userId: userId, authToken: authToken);
-                            }
-                          });
-                        }
-                      });
-                    },
-                    onPermissionRequest: (controller, request) async {
-                      return PermissionResponse(
-                        resources: request.resources,
-                        action: PermissionResponseAction.GRANT,
-                      );
-                    },
-                    onGeolocationPermissionsShowPrompt: (controller, origin) async {
-                      return GeolocationPermissionShowPromptResponse(origin: origin, allow: true, retain: true);
-                    },
-                    onProgressChanged: (controller, progress) {
-                      if (progress == 100) pullToRefreshController?.endRefreshing();
-                      setState(() {
-                        this.progress = progress / 100;
-                        if (progress > 50) isOffline = false;
-                      });
-                    },
-                    onReceivedError: (controller, request, error) {
-                      if (request.isForMainFrame == true) setState(() => isOffline = true);
-                    },
-                    shouldOverrideUrlLoading: (controller, navigationAction) async {
-                      var uri = navigationAction.request.url!;
-                      if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          return NavigationActionPolicy.CANCEL;
-                        }
-                      }
-                      return NavigationActionPolicy.ALLOW;
-                    },
-                  ),
-                ),
+                child: useSafeArea
+                    ? SafeArea(
+                        top: safeAreaTop,
+                        bottom: safeAreaBottom,
+                        child: _buildWebViewBody(),
+                      )
+                    : _buildWebViewBody(),
+              ),
               
               // Progress bar removed as requested (top scroller)
               
