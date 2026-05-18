@@ -308,6 +308,14 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
     const newPackagePath = packageName.replace(/\./g, '/');
     const mainSrcDir = path.join(buildDir, 'android/app/src/main');
     
+    // Prevent duplicate class redeclaration by choosing only one MainActivity (Kotlin takes priority)
+    const hasKotlin = await fs.pathExists(path.join(mainSrcDir, 'kotlin', oldPackagePath, 'MainActivity.kt'));
+    const hasJava = await fs.pathExists(path.join(mainSrcDir, 'java', oldPackagePath, 'MainActivity.java'));
+    if (hasKotlin && hasJava) {
+        console.log("Both Java and Kotlin MainActivity templates found. Deleting Java version to avoid Redeclaration compiler errors.");
+        await fs.remove(path.join(mainSrcDir, 'java', oldPackagePath, 'MainActivity.java'));
+    }
+
     const possiblePaths = [
         { dir: 'kotlin', ext: 'kt' },
         { dir: 'java', ext: 'java' }
