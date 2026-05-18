@@ -398,8 +398,12 @@ async function setupSigning(buildDir, signingData) {
     const keyPath = path.join(buildDir, 'android/app/upload-keystore.jks');
     const propsPath = path.join(buildDir, 'android/key.properties');
     
+    // Always delete any pre-existing copied template keystores to force clean, dynamic regeneration
+    await fs.remove(keyPath);
+    
     const storePass = signingData.storePassword || 'rehan_password_2024';
-    const keyPass = signingData.keyPassword || 'rehan_password_2024';
+    // Force key password to match store password to guarantee PKCS12 standards compliance and avoid padding errors
+    const keyPass = storePass;
     const keyAlias = signingData.keyAlias || 'upload';
     
     const sanitize = (str) => str.replace(/[`"'$()]/g, '');
