@@ -381,8 +381,8 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
             `flutter.versionName=${versionName || '1.0.0'}`,
             `flutter.versionCode=${versionCode || '1'}`,
             `flutter.minSdkVersion=21`,
-            `flutter.targetSdkVersion=34`,
-            `flutter.compileSdkVersion=34`
+            `flutter.targetSdkVersion=36`,
+            `flutter.compileSdkVersion=36`
         ].join('\n') + '\n';
         await fs.writeFile(localPropsPath, propsContent);
     }
