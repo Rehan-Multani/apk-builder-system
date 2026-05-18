@@ -89,7 +89,7 @@ async function buildAPK(data, updateStatus) {
 
         // 4. Update Android Configuration
         await setupSigning(buildDir, { storePassword, keyPassword, keyAlias });
-        await updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode);
+        await updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode, splashColor);
         updateStatus(50);
 
         const runBuild = (cmd, args, step) => {
@@ -205,7 +205,7 @@ async function buildAPK(data, updateStatus) {
 /**
  * Updates Android project files (Manifest, Gradle, Strings)
  */
-async function updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode) {
+async function updateAndroidConfig(buildDir, appName, packageName, versionName, versionCode, splashColor) {
     // 1. Update AndroidManifest.xml
     const manifestPath = path.join(buildDir, 'android/app/src/main/AndroidManifest.xml');
     if (await fs.pathExists(manifestPath)) {
@@ -287,12 +287,20 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
         await fs.writeFile(propsPath, memoryConfig);
     }
 
-    // 4. Update strings.xml
+    // 4. Update strings.xml and colors.xml
     const stringsPath = path.join(buildDir, 'android/app/src/main/res/values/strings.xml');
     if (await fs.pathExists(stringsPath)) {
         let strings = await fs.readFile(stringsPath, 'utf8');
         strings = strings.replace(/<string name="app_name">[^<]*<\/string>/, `<string name="app_name">${appName}</string>`);
         await fs.writeFile(stringsPath, strings);
+    }
+
+    const colorsPath = path.join(buildDir, 'android/app/src/main/res/values/colors.xml');
+    if (await fs.pathExists(colorsPath)) {
+        let colors = await fs.readFile(colorsPath, 'utf8');
+        const colorHex = splashColor || '#ffffff';
+        colors = colors.replace(/<color name="launch_background_color">[^<]*<\/color>/, `<color name="launch_background_color">${colorHex}</color>`);
+        await fs.writeFile(colorsPath, colors);
     }
 
     // 5. Update MainActivity (Path and Package) - Supports both Kotlin and Java

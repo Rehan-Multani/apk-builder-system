@@ -109,7 +109,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
     _loadConfig();
-    _requestAllPermissions();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestAllPermissions();
+    });
     
     pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: Colors.indigo),
