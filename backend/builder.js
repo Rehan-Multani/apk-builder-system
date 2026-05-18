@@ -343,23 +343,36 @@ async function updateAndroidConfig(buildDir, appName, packageName, versionName, 
 
     // 6. Generate local.properties (Crucial for Flutter builds)
     const localPropsPath = path.join(buildDir, 'android/local.properties');
-    let flutterSdkPath = process.env.FLUTTER_ROOT ? process.env.FLUTTER_ROOT.replace(/\\/g, '/') : '';
+    let flutterSdkPath = '';
     
+    // 1. Try running 'flutter sdk-path' (Source of truth)
+    try {
+        const { stdout } = await execPromise('flutter sdk-path');
+        flutterSdkPath = stdout.trim().replace(/\\/g, '/');
+    } catch (e) {
+        console.log("flutter sdk-path failed, trying fallback...");
+    }
+    
+    // 2. Try locating via executable path
     if (!flutterSdkPath) {
         try {
-            const { stdout } = await execPromise('flutter sdk-path');
-            flutterSdkPath = stdout.trim().replace(/\\/g, '/');
-        } catch (e) {
-            // Fallback: locate via executable path (which works on Linux/macOS and where on Windows)
-            try {
-                const whichCmd = process.platform === 'win32' ? 'where flutter' : 'which flutter';
-                const { stdout: whichOut } = await execPromise(whichCmd);
-                const flutterBinPath = whichOut.trim().split('\n')[0];
-                flutterSdkPath = path.dirname(path.dirname(flutterBinPath)).replace(/\\/g, '/');
-            } catch (err) {
-                flutterSdkPath = process.platform === 'win32' ? 'C:/flutter' : '/usr/share/flutter';
-            }
+            const whichCmd = process.platform === 'win32' ? 'where flutter' : 'which flutter';
+            const { stdout: whichOut } = await execPromise(whichCmd);
+            const flutterBinPath = whichOut.trim().split('\n')[0];
+            flutterSdkPath = path.dirname(path.dirname(flutterBinPath)).replace(/\\/g, '/');
+        } catch (err) {
+            console.log("Could not locate flutter executable, trying environment variables...");
         }
+    }
+    
+    // 3. Fallback to process.env.FLUTTER_ROOT
+    if (!flutterSdkPath) {
+        flutterSdkPath = process.env.FLUTTER_ROOT ? process.env.FLUTTER_ROOT.replace(/\\/g, '/') : '';
+    }
+    
+    // 4. Ultimate default fallback
+    if (!flutterSdkPath) {
+        flutterSdkPath = process.platform === 'win32' ? 'C:/flutter' : '/usr/share/flutter';
     }
     
     if (flutterSdkPath) {
