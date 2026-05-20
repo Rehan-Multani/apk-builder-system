@@ -372,10 +372,12 @@ async function simulateDeployment(server, password) {
                 // Step 7: Write Env Configuration files (70%)
                 await updateProgress(70);
                 await writeLog("-> Step 7/12: Writing backend and frontend env configuration files...");
-                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/backend && cat << 'EOF' > /var/www/${cleanDomain}/backend/.env\n${server.backendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env\n${server.backendEnv || ''}\nEOF`;
+                const backendEnvBase64 = Buffer.from(server.backendEnv || '').toString('base64');
+                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/backend && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/backend/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
                 await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
 
-                const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/frontend && cat << 'EOF' > /var/www/${cleanDomain}/frontend/.env\n${server.frontendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env.production\n${server.frontendEnv || ''}\nEOF`;
+                const frontendEnvBase64 = Buffer.from(server.frontendEnv || '').toString('base64');
+                const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/frontend && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/frontend/.env && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env.production`;
                 await executeSshCommandStream(conn, writeFrontendEnv, server._id, writeLog);
 
                 // Step 8: Install Dependencies (80%)
@@ -418,7 +420,7 @@ export default defineConfig({
                 // Step 10: Launch application processes via PM2 (90%)
                 await updateProgress(90);
                 await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
-                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/backend/index.js ]; then pm2 start /var/www/${cleanDomain}/backend/index.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/server.js ]; then pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"; else pm2 start /var/www/${cleanDomain}/index.js --name "${cleanDomain}"; fi; pm2 save`;
+                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start server.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/backend/index.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start index.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/server.js ]; then cd /var/www/${cleanDomain} && pm2 start server.js --name "${cleanDomain}"; else cd /var/www/${cleanDomain} && pm2 start index.js --name "${cleanDomain}"; fi; pm2 save`;
                 await executeSshCommandStream(conn, startPm2Cmd, server._id, writeLog);
 
                 // Step 11: Configure Nginx Reverse Proxy (95%)
@@ -438,7 +440,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:\$PORT_VAL/;
+        proxy_pass http://127.0.0.1:\$PORT_VAL;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \\$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -511,6 +513,127 @@ async function simulateReboot(serverId) {
         console.error('Error running reboot simulation:', err);
     }
 }
+
+// Helper function to handle background redeployment/update over SSH
+async function simulateRedeploy(server, password) {
+    const cleanDomain = server.domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+    const logPrefix = () => `[${new Date().toLocaleTimeString()}]`;
+
+    const writeLog = async (text) => {
+        console.log(`[VPS-Redeploy-${server.name}] ${text}`);
+        await VpsServer.updateOne(
+            { _id: server._id },
+            { $push: { logs: `${logPrefix()} ${text}` } }
+        );
+    };
+
+    const updateProgress = async (progress, status = 'deploying') => {
+        await VpsServer.updateOne(
+            { _id: server._id },
+            { $set: { progress, status } }
+        );
+    };
+
+    const conn = new NodeSSH();
+
+    try {
+        await updateProgress(10, 'deploying');
+        await writeLog("-> Connecting to server SSH for code update...");
+        
+        await conn.connect({
+            host: server.ipAddress,
+            port: 22,
+            username: server.username || 'root',
+            password: password,
+            readyTimeout: 120000,
+            tryKeyboard: true,
+            onKeyboardInteractive: (name, instructions, instructionsLang, prompts, finish) => {
+                finish([password]);
+            }
+        });
+
+        await writeLog("-> SSH Connection established successfully. Starting redeployment sequence...");
+
+        // Step 1: Git pull / fetch and reset
+        await updateProgress(30);
+        await writeLog(`-> Step 1/3: Pulling latest commits from GitHub repository: ${server.githubRepo}`);
+        const gitPullCmd = `cd /var/www/${cleanDomain} && git fetch --all && (git reset --hard origin/main || git reset --hard origin/master || git reset --hard origin/default)`;
+        await executeSshCommandStream(conn, gitPullCmd, server._id, writeLog);
+
+        // Step 2: Install backend dependencies & restart PM2
+        await updateProgress(60);
+        await writeLog("-> Step 2/3: Installing backend node_modules and restarting PM2 process...");
+        const updateBackend = `
+        if [ -f /var/www/${cleanDomain}/backend/package.json ]; then
+            cd /var/www/${cleanDomain}/backend && npm install
+        elif [ -f /var/www/${cleanDomain}/package.json ]; then
+            cd /var/www/${cleanDomain} && npm install
+        fi
+        `;
+        await executeSshCommandStream(conn, updateBackend, server._id, writeLog);
+
+        const pm2RestartCmd = `pm2 restart "${cleanDomain}" || pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}" || pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"`;
+        await executeSshCommandStream(conn, pm2RestartCmd, server._id, writeLog);
+
+        // Step 3: Install frontend dependencies & run build
+        await updateProgress(85);
+        await writeLog("-> Step 3/3: Installing frontend node_modules and rebuilding production bundle...");
+        const updateFrontend = `
+        if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then
+            cd /var/www/${cleanDomain}/frontend && npm install && npm run build
+        elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then
+            cd /var/www/${cleanDomain} && npm run build
+        fi
+        `;
+        await executeSshCommandStream(conn, updateFrontend, server._id, writeLog);
+
+        await writeLog("[SUCCESS] Redeployment completed successfully! Your site is running the latest updates.");
+        await updateProgress(100, 'active');
+
+    } catch (err) {
+        console.error(`Redeployment failed:`, err);
+        await writeLog(`[ERROR] Redeployment failed: ${err.message}`);
+        await updateProgress(100, 'failed');
+    } finally {
+        conn.dispose();
+    }
+}
+
+// Redeploy VPS Endpoint
+app.post('/api/vps/redeploy', authenticate, async (req, res) => {
+    try {
+        const { serverId, password } = req.body;
+        if (!serverId || !password) {
+            return res.status(400).json({ error: 'Server ID and SSH Password are required' });
+        }
+
+        const server = await VpsServer.findOne({ _id: serverId, userId: req.user._id });
+        if (!server) {
+            return res.status(404).json({ error: 'Server not found' });
+        }
+
+        // Clean logs and set deploying status
+        await VpsServer.updateOne(
+            { _id: serverId },
+            {
+                $set: { 
+                    status: 'deploying', 
+                    progress: 0, 
+                    logs: [`[${new Date().toLocaleTimeString()}] [SYSTEM] Initiating code redeployment sequence...`] 
+                }
+            }
+        );
+
+        // Run redeploy in background
+        simulateRedeploy(server, password);
+
+        res.json({ message: 'Redeployment initiated' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to initiate redeployment' });
+    }
+});
+
 
 // Get all VPS servers for logged in user
 app.get('/api/vps/servers', authenticate, async (req, res) => {

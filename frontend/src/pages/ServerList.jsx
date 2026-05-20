@@ -64,6 +64,10 @@ const ServerList = () => {
     };
   }, [servers]);
 
+  const [redeployServer, setRedeployServer] = useState(null);
+  const [sshPassword, setSshPassword] = useState('');
+  const [redeploying, setRedeploying] = useState(false);
+
   const handleAction = async (id, action) => {
     if (action === 'destroy' && !window.confirm('Are you absolutely sure you want to destroy this VPS instance? All deployment history and logs will be permanently deleted from the dashboard.')) {
       return;
@@ -81,6 +85,41 @@ const ServerList = () => {
       }
     } catch (err) {
       alert(err.response?.data?.error || `Failed to perform action ${action}`);
+    }
+  };
+
+  const handleRedeploy = async (e) => {
+    e.preventDefault();
+    if (!redeployServer || !sshPassword) return;
+
+    setRedeploying(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE}/vps/redeploy`, {
+        serverId: redeployServer._id,
+        password: sshPassword
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Automatically open the logs window for the server being redeployed
+      const target = servers.find(s => s._id === redeployServer._id);
+      if (target) {
+        setSelectedServer({
+          ...target,
+          status: 'deploying',
+          progress: 0,
+          logs: [`[${new Date().toLocaleTimeString()}] [SYSTEM] Initiating code redeployment sequence...`]
+        });
+      }
+
+      setRedeployServer(null);
+      setSshPassword('');
+      fetchServers(true);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to initiate redeployment');
+    } finally {
+      setRedeploying(false);
     }
   };
 
@@ -254,6 +293,14 @@ const ServerList = () => {
                         View Logs
                       </motion.button>
                       <button
+                        onClick={() => setRedeployServer(server)}
+                        disabled={server.status === 'deploying' || server.status === 'rebooting'}
+                        className="btn-action-redeploy"
+                        title="Pull updates & Redeploy project"
+                      >
+                        <RefreshCw size={13} className={server.status === 'deploying' ? 'animate-spin' : ''} />
+                      </button>
+                      <button
                         onClick={() => handleAction(server._id, 'reboot')}
                         disabled={server.status === 'deploying' || server.status === 'rebooting'}
                         className="btn-action-reboot"
@@ -421,6 +468,82 @@ const ServerList = () => {
                   </motion.button>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Redeployment password confirmation modal */}
+      <AnimatePresence>
+        {redeployServer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 border-b border-slate-800/80 flex justify-between items-center bg-slate-950/40">
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <RefreshCw className="text-indigo-400" size={18} />
+                  Redeploy Application
+                </h3>
+                <button 
+                  onClick={() => { setRedeployServer(null); setSshPassword(''); }}
+                  className="p-1.5 bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all border-none cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleRedeploy} className="p-6 space-y-4">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  You are about to pull latest commits from <strong className="text-indigo-400 font-bold">{redeployServer.githubRepo.replace('https://github.com/', '')}</strong>, re-install NPM packages, and restart PM2 processes on <strong className="text-white font-bold">{redeployServer.name}</strong> ({redeployServer.ipAddress}).
+                </p>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Server SSH Password
+                  </label>
+                  <div className="input-group">
+                    <input 
+                      type="password"
+                      placeholder="Enter password for SSH username root"
+                      value={sshPassword}
+                      onChange={(e) => setSshPassword(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setRedeployServer(null); setSshPassword(''); }}
+                    className="flex-1 py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold transition-all border-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={redeploying}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {redeploying ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        Initiating...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={12} />
+                        Update & Restart
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}
