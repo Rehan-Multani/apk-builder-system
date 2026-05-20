@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { buildQueue } = require('./queue');
 const { User, Build, VpsServer } = require('./models');
+const { Client } = require('ssh2');
 
 const app = express();
 app.use(cors({
@@ -52,12 +53,12 @@ const authenticate = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
+
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
         const user = await User.findById(decoded.id);
         if (!user) return res.status(401).json({ error: 'User not found' });
-        
+
         req.user = user;
         next();
     } catch (err) {
@@ -130,7 +131,7 @@ app.post('/api/build', authenticate, upload.fields([
         }
 
         const buildId = uuidv4();
-        
+
         // Save to MongoDB
         const newBuild = await Build.create({
             buildId,
@@ -232,51 +233,183 @@ app.post('/api/change-password', async (req, res) => {
 
 // --- One-Click VPS Deployment Endpoints ---
 
-// Helper function to simulate background deployment
-async function simulateDeployment(server) {
-    const deploymentSteps = [
-        { progress: 10, log: `-> Establishing SSH connection on ${server.username || 'root'}@${server.ipAddress}... Success` },
-        { progress: 20, log: "-> Verifying system environment... Linux system detected." },
-        { progress: 30, log: "-> Running package manager update: apt-get update && apt-get upgrade -y... Done" },
-        { progress: 40, log: "-> Installing required dependencies: Node.js (v20), Git, Nginx, PM2, and Certbot... Done" },
-        { progress: 50, log: `-> Cloning GitHub Repository: ${server.githubRepo}... Success` },
-        { progress: 60, log: "-> Creating backend env configuration: writing backend/.env... Configured" },
-        { progress: 70, log: "-> Installing backend dependencies & spawning web API process via PM2... Started" },
-        { progress: 80, log: "-> Building frontend static build: running npm run build... Done" },
-        { progress: 90, log: `-> Configuring Nginx virtual hosts reverse proxy for domain: ${server.domain}... Configured` },
-        { progress: 95, log: `-> Requesting Let's Encrypt SSL Certificate for ${server.domain} via Certbot... Success` },
-        { progress: 100, log: `[SUCCESS] Host setup completed successfully! Your project is online at: https://${server.domain}` }
-    ];
-
-    let stepIndex = 0;
-    const interval = setInterval(async () => {
-        if (stepIndex >= deploymentSteps.length) {
-            clearInterval(interval);
-            return;
-        }
-
-        const step = deploymentSteps[stepIndex];
-        try {
-            const dbServer = await VpsServer.findById(server._id);
-            if (!dbServer) {
-                // Server was destroyed in the meantime
-                clearInterval(interval);
-                return;
-            }
-
-            await VpsServer.updateOne(
-                { _id: server._id },
-                {
-                    $set: { progress: step.progress, status: step.progress === 100 ? 'active' : 'deploying' },
-                    $push: { logs: `[${new Date().toLocaleTimeString()}] ${step.log}` }
+// Helper to execute commands over SSH and stream output to DB in real-time
+function executeSshCommandStream(conn, cmd, serverId, onLogLine) {
+    return new Promise((resolve, reject) => {
+        conn.exec(cmd, (err, stream) => {
+            if (err) return reject(err);
+            
+            let buffer = '';
+            const handleData = (data) => {
+                buffer += data.toString();
+                let lines = buffer.split('\n');
+                buffer = lines.pop(); // keep last incomplete line
+                for (const line of lines) {
+                    if (line.trim()) {
+                        onLogLine(line.trim());
+                    }
                 }
-            );
-        } catch (err) {
-            console.error('Error updating deployment simulation:', err);
-            clearInterval(interval);
+            };
+            
+            stream.on('data', handleData);
+            stream.stderr.on('data', handleData);
+            
+            stream.on('close', (code) => {
+                if (buffer.trim()) {
+                    onLogLine(buffer.trim());
+                }
+                resolve(code);
+            });
+        });
+    });
+}
+
+// Helper function to handle background deployment over SSH
+async function simulateDeployment(server, password) {
+    const cleanDomain = server.domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+    const logPrefix = () => `[${new Date().toLocaleTimeString()}]`;
+
+    const writeLog = async (text) => {
+        console.log(`[VPS-${server.name}] ${text}`);
+        await VpsServer.updateOne(
+            { _id: server._id },
+            { $push: { logs: `${logPrefix()} ${text}` } }
+        );
+    };
+
+    const updateProgress = async (progress, status = 'deploying') => {
+        await VpsServer.updateOne(
+            { _id: server._id },
+            { $set: { progress, status } }
+        );
+    };
+
+    const conn = new Client();
+    
+    conn.on('ready', async () => {
+        await writeLog("-> SSH Connection established successfully. Running deployment script...");
+        
+        try {
+            // Step 1: System Checks (10%)
+            await updateProgress(10);
+            await writeLog("-> Step 1/12: Checking target OS details...");
+            await executeSshCommandStream(conn, "uname -a", server._id, writeLog);
+            
+            // Step 2: Update packages (20%)
+            await updateProgress(20);
+            await writeLog("-> Step 2/12: Running system package updates (apt-get update)...");
+            await executeSshCommandStream(conn, "export DEBIAN_FRONTEND=noninteractive && apt-get update -y", server._id, writeLog);
+            
+            // Step 3: Install Node.js (30%)
+            await updateProgress(30);
+            await writeLog("-> Step 3/12: Verifying Node.js environment...");
+            const nodeInstallCmd = `if ! command -v node &> /dev/null; then echo "Node.js not found. Installing..." && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs; else echo "Node.js $(node -v) is already installed."; fi`;
+            await executeSshCommandStream(conn, nodeInstallCmd, server._id, writeLog);
+            
+            // Step 4: Install PM2 (40%)
+            await updateProgress(40);
+            await writeLog("-> Step 4/12: Verifying PM2 process manager...");
+            const pm2InstallCmd = `if ! command -v pm2 &> /dev/null; then echo "PM2 not found. Installing..." && npm install -g pm2; else echo "PM2 $(pm2 -v) is already installed."; fi`;
+            await executeSshCommandStream(conn, pm2InstallCmd, server._id, writeLog);
+
+            // Step 5: Install Nginx & Certbot & Git (50%)
+            await updateProgress(50);
+            await writeLog("-> Step 5/12: Installing Nginx, Git, and Certbot dependencies...");
+            const depCmd = `apt-get install -y nginx git certbot python3-certbot-nginx`;
+            await executeSshCommandStream(conn, depCmd, server._id, writeLog);
+
+            // Step 6: Clone Git Repository (60%)
+            await updateProgress(60);
+            await writeLog(`-> Step 6/12: Cloning repository from: ${server.githubRepo}...`);
+            const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then echo "Directory exists. Pulling updates..." && git fetch --all && git reset --hard origin/main || git reset --hard origin/master; else echo "Cloning clean repository..." && git clone ${server.githubRepo} .; fi`;
+            await executeSshCommandStream(conn, cloneCmd, server._id, writeLog);
+
+            // Step 7: Write Env Configuration files (70%)
+            await updateProgress(70);
+            await writeLog("-> Step 7/12: Writing backend and frontend env configuration files...");
+            const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/backend && cat << 'EOF' > /var/www/${cleanDomain}/backend/.env\n${server.backendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env\n${server.backendEnv || ''}\nEOF`;
+            await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
+
+            const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/frontend && cat << 'EOF' > /var/www/${cleanDomain}/frontend/.env\n${server.frontendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env.production\n${server.frontendEnv || ''}\nEOF`;
+            await executeSshCommandStream(conn, writeFrontendEnv, server._id, writeLog);
+
+            // Step 8: Install Dependencies (80%)
+            await updateProgress(80);
+            await writeLog("-> Step 8/12: Installing npm dependencies...");
+            const installBackendDeps = `if [ -f /var/www/${cleanDomain}/backend/package.json ]; then cd /var/www/${cleanDomain}/backend && npm install; elif [ -f /var/www/${cleanDomain}/package.json ]; then cd /var/www/${cleanDomain} && npm install; fi`;
+            await executeSshCommandStream(conn, installBackendDeps, server._id, writeLog);
+
+            const installFrontendDeps = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm install; fi`;
+            await executeSshCommandStream(conn, installFrontendDeps, server._id, writeLog);
+
+            // Step 9: Build Frontend Assets (85%)
+            await updateProgress(85);
+            await writeLog("-> Step 9/12: Bundling frontend production assets...");
+            const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
+            await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
+
+            // Step 10: Launch application processes via PM2 (90%)
+            await updateProgress(90);
+            await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
+            const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}"; else pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"; fi; pm2 save`;
+            await executeSshCommandStream(conn, startPm2Cmd, server._id, writeLog);
+
+            // Step 11: Configure Nginx Reverse Proxy (95%)
+            await updateProgress(95);
+            await writeLog(`-> Step 11/12: Configuring Nginx virtual hosts reverse proxy for: ${cleanDomain}`);
+            
+            const writeNginxConfig = `
+            PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env || echo "5000")
+            cat << EOF > /etc/nginx/sites-available/${cleanDomain}
+server {
+    listen 80;
+    server_name ${cleanDomain};
+
+    location / {
+        root /var/www/${cleanDomain}/frontend/dist;
+        try_files \\$uri \\$uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:\\$PORT_VAL/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \\$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \\$host;
+        proxy_cache_bypass \\$http_upgrade;
+    }
+}
+EOF
+            ln -sf /etc/nginx/sites-available/${cleanDomain} /etc/nginx/sites-enabled/
+            rm -f /etc/nginx/sites-enabled/default
+            nginx -t && systemctl reload nginx
+            `;
+            await executeSshCommandStream(conn, writeNginxConfig, server._id, writeLog);
+
+            // Step 12: Request Certbot SSL Certificate (100%)
+            await updateProgress(98);
+            await writeLog("-> Step 12/12: Securing site with SSL Let's Encrypt certificates...");
+            const sslCmd = `certbot --nginx -d ${cleanDomain} --non-interactive --agree-tos --register-unsafely-without-email || echo "SSL setup failed. Check DNS propagation."`;
+            await executeSshCommandStream(conn, sslCmd, server._id, writeLog);
+
+            await writeLog(`[SUCCESS] Host setup completed successfully! Your project is online at: https://${cleanDomain}`);
+            await updateProgress(100, 'active');
+
+        } catch (execErr) {
+            await writeLog(`[ERROR] Exec encountered issues: ${execErr.message}`);
+            await updateProgress(100, 'failed');
+        } finally {
+            conn.end();
         }
-        stepIndex++;
-    }, 4000); // 4 seconds interval
+    }).on('error', async (err) => {
+        await writeLog(`[ERROR] SSH Connection error to root@${server.ipAddress}: ${err.message}`);
+        await updateProgress(100, 'failed');
+    }).connect({
+        host: server.ipAddress,
+        port: 22,
+        username: server.username || 'root',
+        password: password
+    });
 }
 
 // Helper function to simulate warm reboot
@@ -325,11 +458,14 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'Name, IP Address, Domain and GitHub Repo URL are required' });
         }
 
+        // Sanitize domain to remove protocols and trailing slashes
+        const cleanDomain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+
         const serverId = `vps-${uuidv4().substring(0, 8)}`;
         const initialLogs = [
             `[${new Date().toLocaleTimeString()}] [SYSTEM] Connecting to server SSH on root@${ipAddress}...`,
             `[${new Date().toLocaleTimeString()}] [SYSTEM] Target IP: ${ipAddress} (User: ${username || 'root'})`,
-            `[${new Date().toLocaleTimeString()}] [SYSTEM] Domain Name: ${domain}`,
+            `[${new Date().toLocaleTimeString()}] [SYSTEM] Domain Name: ${cleanDomain}`,
             `[${new Date().toLocaleTimeString()}] [SYSTEM] Repository: ${githubRepo}`
         ];
 
@@ -338,7 +474,7 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             name,
             ipAddress,
             username: username || 'root',
-            domain,
+            domain: cleanDomain,
             githubRepo,
             backendEnv,
             frontendEnv,
@@ -349,7 +485,7 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
         });
 
         // Trigger simulation in the background
-        simulateDeployment(server);
+        simulateDeployment(server, password);
 
         res.json({ message: 'Deployment initiated', server });
     } catch (err) {
