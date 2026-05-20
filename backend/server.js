@@ -308,13 +308,35 @@ async function simulateDeployment(server, password) {
                 
                 // Step 2: Update packages (20%)
                 await updateProgress(20);
-                await writeLog("-> Step 2/12: Running system package updates (apt-get update)...");
-                await executeSshCommandStream(conn, "export DEBIAN_FRONTEND=noninteractive && apt-get update -y", server._id, writeLog);
+                await writeLog("-> Step 2/12: Running system package updates...");
+                const updatePkgCmd = `
+                if command -v apt-get &> /dev/null; then
+                    export DEBIAN_FRONTEND=noninteractive && apt-get update -y
+                elif command -v dnf &> /dev/null; then
+                    dnf clean all && dnf check-update -y || true
+                else
+                    yum clean all && yum check-update -y || true
+                fi
+                `;
+                await executeSshCommandStream(conn, updatePkgCmd, server._id, writeLog);
                 
                 // Step 3: Install Node.js (30%)
                 await updateProgress(30);
                 await writeLog("-> Step 3/12: Verifying Node.js environment...");
-                const nodeInstallCmd = `if ! command -v node &> /dev/null; then echo "Node.js not found. Installing..." && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs; else echo "Node.js $(node -v) is already installed."; fi`;
+                const nodeInstallCmd = `
+                if ! command -v node &> /dev/null; then
+                    echo "Node.js not found. Installing..."
+                    if command -v apt-get &> /dev/null; then
+                        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
+                    elif command -v dnf &> /dev/null; then
+                        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && dnf install -y nodejs
+                    else
+                        curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && yum install -y nodejs
+                    fi
+                else
+                    echo "Node.js $(node -v) is already installed."
+                fi
+                `;
                 await executeSshCommandStream(conn, nodeInstallCmd, server._id, writeLog);
                 
                 // Step 4: Install PM2 (40%)
@@ -328,7 +350,17 @@ async function simulateDeployment(server, password) {
                 await writeLog("-> Step 5/12: Installing Nginx, Git, Certbot, and local MongoDB server...");
                 
                 // Let's install dependencies first
-                const depCmd = `apt-get install -y nginx git certbot python3-certbot-nginx`;
+                const depCmd = `
+                if command -v apt-get &> /dev/null; then
+                    apt-get install -y nginx git certbot python3-certbot-nginx
+                elif command -v dnf &> /dev/null; then
+                    dnf install -y epel-release || true
+                    dnf install -y nginx git certbot python3-certbot-nginx || dnf install -y nginx git certbot || true
+                else
+                    yum install -y epel-release || true
+                    yum install -y nginx git certbot python3-certbot-nginx || yum install -y nginx git certbot || true
+                fi
+                `;
                 await executeSshCommandStream(conn, depCmd, server._id, writeLog);
                 
                 // Now let's run the MongoDB installation and setup commands
@@ -336,11 +368,28 @@ async function simulateDeployment(server, password) {
                 const mongoInstallCmd = `
                 if ! command -v mongod &> /dev/null; then
                     echo "MongoDB not found. Fetching and installing MongoDB..."
-                    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg --yes || true
-                    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list || true
-                    export DEBIAN_FRONTEND=noninteractive
-                    apt-get update -y || true
-                    apt-get install -y mongodb-org || apt-get install -y mongodb || apt-get install -y mongodb-server || true
+                    if command -v apt-get &> /dev/null; then
+                        curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg --yes || true
+                        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list || true
+                        export DEBIAN_FRONTEND=noninteractive
+                        apt-get update -y || true
+                        apt-get install -y mongodb-org || apt-get install -y mongodb || apt-get install -y mongodb-server || true
+                    else
+                        # RHEL/CentOS/Rocky/AlmaLinux
+                        cat << 'EOF' > /etc/yum.repos.d/mongodb-org-7.0.repo
+[mongodb-org-7.0]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\\$releasever/mongodb-org/7.0/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://pgp.mongodb.com/server-7.0.asc
+EOF
+                        if command -v dnf &> /dev/null; then
+                            dnf install -y mongodb-org || true
+                        else
+                            yum install -y mongodb-org || true
+                        fi
+                    fi
                 else
                     echo "MongoDB is already installed on the target machine."
                 fi
@@ -429,7 +478,8 @@ export default defineConfig({
                 
                 const writeNginxConfig = `
                 PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env 2>/dev/null || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env 2>/dev/null || echo "5000")
-                cat << EOF > /etc/nginx/sites-available/${cleanDomain}
+                mkdir -p /etc/nginx/conf.d
+                cat << EOF > /etc/nginx/conf.d/${cleanDomain}.conf
 server {
     listen 80;
     server_name ${cleanDomain};
@@ -449,9 +499,15 @@ server {
     }
 }
 EOF
-                ln -sf /etc/nginx/sites-available/${cleanDomain} /etc/nginx/sites-enabled/
+                # If SELinux is active, allow Nginx reverse proxy connections
+                if command -v setsebool &> /dev/null; then
+                    setsebool -P httpd_can_network_connect 1 || true
+                fi
+                # Disable conflicting default configurations if they exist
                 rm -f /etc/nginx/sites-enabled/default
-                nginx -t && systemctl reload nginx
+                rm -f /etc/nginx/conf.d/default.conf
+                
+                nginx -t && (systemctl restart nginx || systemctl reload nginx || service nginx restart)
                 `;
                 await executeSshCommandStream(conn, writeNginxConfig, server._id, writeLog);
 
@@ -572,7 +628,7 @@ async function simulateRedeploy(server, password) {
         `;
         await executeSshCommandStream(conn, updateBackend, server._id, writeLog);
 
-        const pm2RestartCmd = `pm2 restart "${cleanDomain}" || pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}" || pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"`;
+        const pm2RestartCmd = `pm2 restart "${cleanDomain}" || (if [ -f /var/www/${cleanDomain}/backend/server.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start server.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/backend/index.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start index.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/server.js ]; then cd /var/www/${cleanDomain} && pm2 start server.js --name "${cleanDomain}"; else cd /var/www/${cleanDomain} && pm2 start index.js --name "${cleanDomain}"; fi; pm2 save)`;
         await executeSshCommandStream(conn, pm2RestartCmd, server._id, writeLog);
 
         // Step 3: Install frontend dependencies & run build
