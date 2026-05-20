@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { buildQueue } = require('./queue');
 const { User, Build, VpsServer } = require('./models');
-const { Client } = require('ssh2');
+const { NodeSSH } = require('node-ssh');
 
 const app = express();
 app.use(cors({
@@ -235,32 +235,26 @@ app.post('/api/change-password', async (req, res) => {
 
 // Helper to execute commands over SSH and stream output to DB in real-time
 function executeSshCommandStream(conn, cmd, serverId, onLogLine) {
-    return new Promise((resolve, reject) => {
-        conn.exec(cmd, (err, stream) => {
-            if (err) return reject(err);
-            
-            let buffer = '';
-            const handleData = (data) => {
-                buffer += data.toString();
-                let lines = buffer.split('\n');
-                buffer = lines.pop(); // keep last incomplete line
-                for (const line of lines) {
-                    if (line.trim()) {
-                        onLogLine(line.trim());
-                    }
-                }
-            };
-            
-            stream.on('data', handleData);
-            stream.stderr.on('data', handleData);
-            
-            stream.on('close', (code) => {
-                if (buffer.trim()) {
-                    onLogLine(buffer.trim());
-                }
-                resolve(code);
-            });
-        });
+    let buffer = '';
+    const handleData = (data) => {
+        buffer += data.toString();
+        let lines = buffer.split('\n');
+        buffer = lines.pop(); // keep last incomplete line
+        for (const line of lines) {
+            if (line.trim()) {
+                onLogLine(line.trim());
+            }
+        }
+    };
+    
+    return conn.execCommand(cmd, {
+        onStdout: (chunk) => handleData(chunk),
+        onStderr: (chunk) => handleData(chunk)
+    }).then((result) => {
+        if (buffer.trim()) {
+            onLogLine(buffer.trim());
+        }
+        return result.code;
     });
 }
 
@@ -287,11 +281,23 @@ async function simulateDeployment(server, password) {
     const maxRetries = 3;
     let attempt = 0;
 
-    const connectWithRetry = () => {
+    const connectWithRetry = async () => {
         attempt++;
-        const conn = new Client();
+        const conn = new NodeSSH();
 
-        conn.on('ready', async () => {
+        try {
+            await conn.connect({
+                host: server.ipAddress,
+                port: 22,
+                username: server.username || 'root',
+                password: password,
+                readyTimeout: 120000,
+                tryKeyboard: true,
+                onKeyboardInteractive: (name, instructions, instructionsLang, prompts, finish) => {
+                    finish([password]);
+                }
+            });
+
             await writeLog("-> SSH Connection established successfully. Running deployment script...");
             
             try {
@@ -404,11 +410,10 @@ EOF
                 await writeLog(`[ERROR] Exec encountered issues: ${execErr.message}`);
                 await updateProgress(100, 'failed');
             } finally {
-                conn.end();
+                conn.dispose();
             }
-        });
 
-        conn.on('error', async (err) => {
+        } catch (err) {
             console.error(`SSH connection attempt ${attempt} failed:`, err);
             if (attempt < maxRetries) {
                 await writeLog(`[WARNING] SSH Connection attempt ${attempt} failed: ${err.message}. Retrying in 3 seconds...`);
@@ -417,16 +422,7 @@ EOF
                 await writeLog(`[ERROR] SSH Connection error to root@${server.ipAddress}: ${err.message}`);
                 await updateProgress(100, 'failed');
             }
-        });
-
-        conn.connect({
-            host: server.ipAddress,
-            port: 22,
-            username: server.username || 'root',
-            password: password,
-            readyTimeout: 60000,
-            keepaliveInterval: 10000
-        });
+        }
     };
 
     connectWithRetry();
