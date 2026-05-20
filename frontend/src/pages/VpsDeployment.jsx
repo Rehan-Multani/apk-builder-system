@@ -19,12 +19,12 @@ const VpsDeployment = () => {
   
   // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    ipAddress: '',
+    name: 'kariyappanavar',
+    ipAddress: '210.56.147.228',
     username: 'root',
-    password: '',
-    domain: '',
-    githubRepo: '',
+    password: 'paytel@123paytel',
+    domain: 'https://kariyappanavar.cloudedata.com/',
+    githubRepo: 'https://github.com/devxankit/Education-CRM-',
     backendEnv: '',
     frontendEnv: ''
   });
@@ -92,12 +92,12 @@ const VpsDeployment = () => {
       setSelectedServer(res.data.server);
       // Reset form to defaults (keeping generic labels)
       setFormData({
-        name: '',
-        ipAddress: '',
+        name: 'kariyappanavar',
+        ipAddress: '210.56.147.228',
         username: 'root',
-        password: '',
-        domain: '',
-        githubRepo: '',
+        password: 'paytel@123paytel',
+        domain: 'https://kariyappanavar.cloudedata.com/',
+        githubRepo: 'https://github.com/devxankit/Education-CRM-',
         backendEnv: '',
         frontendEnv: ''
       });
