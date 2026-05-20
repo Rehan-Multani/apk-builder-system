@@ -405,17 +405,17 @@ EOF
                 const mongoUser = 'db_user';
                 const mongoUserCmd = `
                 sleep 3
-                mongosh admin --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || \
-                mongo admin --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || \
-                mongosh ${mongoDbName} --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || \
-                mongo ${mongoDbName} --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || true
+                mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
+                mongo admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
+                mongosh ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
+                mongo ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || true
                 `;
                 await executeSshCommandStream(conn, mongoUserCmd, server._id, writeLog);
 
                 // Step 6: Clone Git Repository (60%)
                 await updateProgress(60);
                 await writeLog(`-> Step 6/12: Cloning repository from: ${server.githubRepo}...`);
-                const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then echo "Directory exists. Pulling updates..." && git fetch --all && git reset --hard origin/main || git reset --hard origin/master; else echo "Cloning clean repository..." && git clone ${server.githubRepo} .; fi`;
+                const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then CURRENT_URL=\$(git config --get remote.origin.url 2>/dev/null || echo ""); if [ "\$CURRENT_URL" != "${server.githubRepo}" ] && [ "\$CURRENT_URL" != "${server.githubRepo}.git" ]; then echo "Repository changed! Re-cloning..." && find . -mindepth 1 -delete 2>/dev/null || true && git clone ${server.githubRepo} .; else echo "Directory exists. Pulling updates..." && git fetch --all && git reset --hard origin/main || git reset --hard origin/master; fi; else echo "Cloning clean repository..." && find . -mindepth 1 -delete 2>/dev/null || true && git clone ${server.githubRepo} .; fi`;
                 await executeSshCommandStream(conn, cloneCmd, server._id, writeLog);
 
                 // Step 7: Write Env Configuration files (70%)
