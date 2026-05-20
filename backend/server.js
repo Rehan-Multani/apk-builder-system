@@ -284,83 +284,88 @@ async function simulateDeployment(server, password) {
         );
     };
 
-    const conn = new Client();
-    
-    conn.on('ready', async () => {
-        await writeLog("-> SSH Connection established successfully. Running deployment script...");
-        
-        try {
-            // Step 1: System Checks (10%)
-            await updateProgress(10);
-            await writeLog("-> Step 1/12: Checking target OS details...");
-            await executeSshCommandStream(conn, "uname -a", server._id, writeLog);
+    const maxRetries = 3;
+    let attempt = 0;
+
+    const connectWithRetry = () => {
+        attempt++;
+        const conn = new Client();
+
+        conn.on('ready', async () => {
+            await writeLog("-> SSH Connection established successfully. Running deployment script...");
             
-            // Step 2: Update packages (20%)
-            await updateProgress(20);
-            await writeLog("-> Step 2/12: Running system package updates (apt-get update)...");
-            await executeSshCommandStream(conn, "export DEBIAN_FRONTEND=noninteractive && apt-get update -y", server._id, writeLog);
-            
-            // Step 3: Install Node.js (30%)
-            await updateProgress(30);
-            await writeLog("-> Step 3/12: Verifying Node.js environment...");
-            const nodeInstallCmd = `if ! command -v node &> /dev/null; then echo "Node.js not found. Installing..." && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs; else echo "Node.js $(node -v) is already installed."; fi`;
-            await executeSshCommandStream(conn, nodeInstallCmd, server._id, writeLog);
-            
-            // Step 4: Install PM2 (40%)
-            await updateProgress(40);
-            await writeLog("-> Step 4/12: Verifying PM2 process manager...");
-            const pm2InstallCmd = `if ! command -v pm2 &> /dev/null; then echo "PM2 not found. Installing..." && npm install -g pm2; else echo "PM2 $(pm2 -v) is already installed."; fi`;
-            await executeSshCommandStream(conn, pm2InstallCmd, server._id, writeLog);
+            try {
+                // Step 1: System Checks (10%)
+                await updateProgress(10);
+                await writeLog("-> Step 1/12: Checking target OS details...");
+                await executeSshCommandStream(conn, "uname -a", server._id, writeLog);
+                
+                // Step 2: Update packages (20%)
+                await updateProgress(20);
+                await writeLog("-> Step 2/12: Running system package updates (apt-get update)...");
+                await executeSshCommandStream(conn, "export DEBIAN_FRONTEND=noninteractive && apt-get update -y", server._id, writeLog);
+                
+                // Step 3: Install Node.js (30%)
+                await updateProgress(30);
+                await writeLog("-> Step 3/12: Verifying Node.js environment...");
+                const nodeInstallCmd = `if ! command -v node &> /dev/null; then echo "Node.js not found. Installing..." && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs; else echo "Node.js $(node -v) is already installed."; fi`;
+                await executeSshCommandStream(conn, nodeInstallCmd, server._id, writeLog);
+                
+                // Step 4: Install PM2 (40%)
+                await updateProgress(40);
+                await writeLog("-> Step 4/12: Verifying PM2 process manager...");
+                const pm2InstallCmd = `if ! command -v pm2 &> /dev/null; then echo "PM2 not found. Installing..." && npm install -g pm2; else echo "PM2 $(pm2 -v) is already installed."; fi`;
+                await executeSshCommandStream(conn, pm2InstallCmd, server._id, writeLog);
 
-            // Step 5: Install Nginx & Certbot & Git (50%)
-            await updateProgress(50);
-            await writeLog("-> Step 5/12: Installing Nginx, Git, and Certbot dependencies...");
-            const depCmd = `apt-get install -y nginx git certbot python3-certbot-nginx`;
-            await executeSshCommandStream(conn, depCmd, server._id, writeLog);
+                // Step 5: Install Nginx & Certbot & Git (50%)
+                await updateProgress(50);
+                await writeLog("-> Step 5/12: Installing Nginx, Git, and Certbot dependencies...");
+                const depCmd = `apt-get install -y nginx git certbot python3-certbot-nginx`;
+                await executeSshCommandStream(conn, depCmd, server._id, writeLog);
 
-            // Step 6: Clone Git Repository (60%)
-            await updateProgress(60);
-            await writeLog(`-> Step 6/12: Cloning repository from: ${server.githubRepo}...`);
-            const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then echo "Directory exists. Pulling updates..." && git fetch --all && git reset --hard origin/main || git reset --hard origin/master; else echo "Cloning clean repository..." && git clone ${server.githubRepo} .; fi`;
-            await executeSshCommandStream(conn, cloneCmd, server._id, writeLog);
+                // Step 6: Clone Git Repository (60%)
+                await updateProgress(60);
+                await writeLog(`-> Step 6/12: Cloning repository from: ${server.githubRepo}...`);
+                const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then echo "Directory exists. Pulling updates..." && git fetch --all && git reset --hard origin/main || git reset --hard origin/master; else echo "Cloning clean repository..." && git clone ${server.githubRepo} .; fi`;
+                await executeSshCommandStream(conn, cloneCmd, server._id, writeLog);
 
-            // Step 7: Write Env Configuration files (70%)
-            await updateProgress(70);
-            await writeLog("-> Step 7/12: Writing backend and frontend env configuration files...");
-            const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/backend && cat << 'EOF' > /var/www/${cleanDomain}/backend/.env\n${server.backendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env\n${server.backendEnv || ''}\nEOF`;
-            await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
+                // Step 7: Write Env Configuration files (70%)
+                await updateProgress(70);
+                await writeLog("-> Step 7/12: Writing backend and frontend env configuration files...");
+                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/backend && cat << 'EOF' > /var/www/${cleanDomain}/backend/.env\n${server.backendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env\n${server.backendEnv || ''}\nEOF`;
+                await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
 
-            const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/frontend && cat << 'EOF' > /var/www/${cleanDomain}/frontend/.env\n${server.frontendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env.production\n${server.frontendEnv || ''}\nEOF`;
-            await executeSshCommandStream(conn, writeFrontendEnv, server._id, writeLog);
+                const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/frontend && cat << 'EOF' > /var/www/${cleanDomain}/frontend/.env\n${server.frontendEnv || ''}\nEOF || cat << 'EOF' > /var/www/${cleanDomain}/.env.production\n${server.frontendEnv || ''}\nEOF`;
+                await executeSshCommandStream(conn, writeFrontendEnv, server._id, writeLog);
 
-            // Step 8: Install Dependencies (80%)
-            await updateProgress(80);
-            await writeLog("-> Step 8/12: Installing npm dependencies...");
-            const installBackendDeps = `if [ -f /var/www/${cleanDomain}/backend/package.json ]; then cd /var/www/${cleanDomain}/backend && npm install; elif [ -f /var/www/${cleanDomain}/package.json ]; then cd /var/www/${cleanDomain} && npm install; fi`;
-            await executeSshCommandStream(conn, installBackendDeps, server._id, writeLog);
+                // Step 8: Install Dependencies (80%)
+                await updateProgress(80);
+                await writeLog("-> Step 8/12: Installing npm dependencies...");
+                const installBackendDeps = `if [ -f /var/www/${cleanDomain}/backend/package.json ]; then cd /var/www/${cleanDomain}/backend && npm install; elif [ -f /var/www/${cleanDomain}/package.json ]; then cd /var/www/${cleanDomain} && npm install; fi`;
+                await executeSshCommandStream(conn, installBackendDeps, server._id, writeLog);
 
-            const installFrontendDeps = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm install; fi`;
-            await executeSshCommandStream(conn, installFrontendDeps, server._id, writeLog);
+                const installFrontendDeps = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm install; fi`;
+                await executeSshCommandStream(conn, installFrontendDeps, server._id, writeLog);
 
-            // Step 9: Build Frontend Assets (85%)
-            await updateProgress(85);
-            await writeLog("-> Step 9/12: Bundling frontend production assets...");
-            const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
-            await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
+                // Step 9: Build Frontend Assets (85%)
+                await updateProgress(85);
+                await writeLog("-> Step 9/12: Bundling frontend production assets...");
+                const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
+                await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
 
-            // Step 10: Launch application processes via PM2 (90%)
-            await updateProgress(90);
-            await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
-            const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}"; else pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"; fi; pm2 save`;
-            await executeSshCommandStream(conn, startPm2Cmd, server._id, writeLog);
+                // Step 10: Launch application processes via PM2 (90%)
+                await updateProgress(90);
+                await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
+                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}"; else pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"; fi; pm2 save`;
+                await executeSshCommandStream(conn, startPm2Cmd, server._id, writeLog);
 
-            // Step 11: Configure Nginx Reverse Proxy (95%)
-            await updateProgress(95);
-            await writeLog(`-> Step 11/12: Configuring Nginx virtual hosts reverse proxy for: ${cleanDomain}`);
-            
-            const writeNginxConfig = `
-            PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env || echo "5000")
-            cat << EOF > /etc/nginx/sites-available/${cleanDomain}
+                // Step 11: Configure Nginx Reverse Proxy (95%)
+                await updateProgress(95);
+                await writeLog(`-> Step 11/12: Configuring Nginx virtual hosts reverse proxy for: ${cleanDomain}`);
+                
+                const writeNginxConfig = `
+                PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env || echo "5000")
+                cat << EOF > /etc/nginx/sites-available/${cleanDomain}
 server {
     listen 80;
     server_name ${cleanDomain};
@@ -380,38 +385,51 @@ server {
     }
 }
 EOF
-            ln -sf /etc/nginx/sites-available/${cleanDomain} /etc/nginx/sites-enabled/
-            rm -f /etc/nginx/sites-enabled/default
-            nginx -t && systemctl reload nginx
-            `;
-            await executeSshCommandStream(conn, writeNginxConfig, server._id, writeLog);
+                ln -sf /etc/nginx/sites-available/${cleanDomain} /etc/nginx/sites-enabled/
+                rm -f /etc/nginx/sites-enabled/default
+                nginx -t && systemctl reload nginx
+                `;
+                await executeSshCommandStream(conn, writeNginxConfig, server._id, writeLog);
 
-            // Step 12: Request Certbot SSL Certificate (100%)
-            await updateProgress(98);
-            await writeLog("-> Step 12/12: Securing site with SSL Let's Encrypt certificates...");
-            const sslCmd = `certbot --nginx -d ${cleanDomain} --non-interactive --agree-tos --register-unsafely-without-email || echo "SSL setup failed. Check DNS propagation."`;
-            await executeSshCommandStream(conn, sslCmd, server._id, writeLog);
+                // Step 12: Request Certbot SSL Certificate (100%)
+                await updateProgress(98);
+                await writeLog("-> Step 12/12: Securing site with SSL Let's Encrypt certificates...");
+                const sslCmd = `certbot --nginx -d ${cleanDomain} --non-interactive --agree-tos --register-unsafely-without-email || echo "SSL setup failed. Check DNS propagation."`;
+                await executeSshCommandStream(conn, sslCmd, server._id, writeLog);
 
-            await writeLog(`[SUCCESS] Host setup completed successfully! Your project is online at: https://${cleanDomain}`);
-            await updateProgress(100, 'active');
+                await writeLog(`[SUCCESS] Host setup completed successfully! Your project is online at: https://${cleanDomain}`);
+                await updateProgress(100, 'active');
 
-        } catch (execErr) {
-            await writeLog(`[ERROR] Exec encountered issues: ${execErr.message}`);
-            await updateProgress(100, 'failed');
-        } finally {
-            conn.end();
-        }
-    }).on('error', async (err) => {
-        await writeLog(`[ERROR] SSH Connection error to root@${server.ipAddress}: ${err.message}`);
-        await updateProgress(100, 'failed');
-    }).connect({
-        host: server.ipAddress,
-        port: 22,
-        username: server.username || 'root',
-        password: password,
-        readyTimeout: 60000,
-        keepaliveInterval: 10000
-    });
+            } catch (execErr) {
+                await writeLog(`[ERROR] Exec encountered issues: ${execErr.message}`);
+                await updateProgress(100, 'failed');
+            } finally {
+                conn.end();
+            }
+        });
+
+        conn.on('error', async (err) => {
+            console.error(`SSH connection attempt ${attempt} failed:`, err);
+            if (attempt < maxRetries) {
+                await writeLog(`[WARNING] SSH Connection attempt ${attempt} failed: ${err.message}. Retrying in 3 seconds...`);
+                setTimeout(connectWithRetry, 3000);
+            } else {
+                await writeLog(`[ERROR] SSH Connection error to root@${server.ipAddress}: ${err.message}`);
+                await updateProgress(100, 'failed');
+            }
+        });
+
+        conn.connect({
+            host: server.ipAddress,
+            port: 22,
+            username: server.username || 'root',
+            password: password,
+            readyTimeout: 60000,
+            keepaliveInterval: 10000
+        });
+    };
+
+    connectWithRetry();
 }
 
 // Helper function to simulate warm reboot
