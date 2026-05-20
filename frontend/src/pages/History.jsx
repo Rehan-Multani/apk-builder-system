@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE, BACKEND_URL } from '../config';
 import { History as HistoryIcon, Download, ExternalLink, Smartphone, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 const History = () => {
@@ -13,7 +14,7 @@ const History = () => {
   const fetchHistory = async () => {
     const token = localStorage.getItem('token');
     try {
-      const res = await axios.get(`https://backend.cloudedata.in/api/history`, {
+      const res = await axios.get(`${API_BASE}/history`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBuilds(res.data);
@@ -118,14 +119,14 @@ const History = () => {
                       <div className="flex flex-col gap-2">
                         <div className="flex gap-2 justify-end">
                           <a 
-                            href={`https://backend.cloudedata.in${build.apkUrl}`} 
+                            href={`${BACKEND_URL}${build.apkUrl}`} 
                             download
                             className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
                           >
                             <Download size={14} /> APK
                           </a>
                           <a 
-                            href={`https://backend.cloudedata.in${build.aabUrl}`} 
+                            href={`${BACKEND_URL}${build.aabUrl}`} 
                             download
                             className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
                           >
@@ -133,7 +134,7 @@ const History = () => {
                           </a>
                         </div>
                         <a 
-                          href={`https://backend.cloudedata.in${build.jksUrl}`} 
+                          href={`${BACKEND_URL}${build.jksUrl}`} 
                           download
                           className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all no-underline hover:bg-slate-600 hover:text-white"
                         >

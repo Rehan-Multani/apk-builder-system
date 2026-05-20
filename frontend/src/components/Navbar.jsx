@@ -23,22 +23,22 @@ const Navbar = ({ user, onLogout }) => {
         {/* Links & User Section */}
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-6">
-            <Link 
-              to="/" 
+            <Link
+              to="/"
               className={`flex items-center gap-2 nav-link ${isActive('/') ? 'active' : ''}`}
             >
               <LayoutDashboard size={18} />
-              <span className="font-medium hidden md:block">Dashboard</span>
+              <span className="font-medium hidden md:block">Apk Convertor</span>
             </Link>
-            <Link 
-              to="/history" 
+            <Link
+              to="/history"
               className={`flex items-center gap-2 nav-link ${isActive('/history') ? 'active' : ''}`}
             >
               <History size={18} />
               <span className="font-medium hidden md:block">Builds</span>
             </Link>
-            <Link 
-              to="/vps" 
+            <Link
+              to="/vps"
               className={`flex items-center gap-2 nav-link ${isActive('/vps') ? 'active' : ''}`}
             >
               <Server size={18} />
@@ -51,7 +51,7 @@ const Navbar = ({ user, onLogout }) => {
               <p className="text-sm font-bold leading-none text-white">{user.email}</p>
               <p className="text-xs text-slate-400 mt-1">Administrator</p>
             </div>
-            <button 
+            <button
               onClick={onLogout}
               className="p-2 text-slate-400 hover:text-danger transition-colors bg-transparent border-none cursor-pointer"
               title="Logout"

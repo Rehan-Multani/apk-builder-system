@@ -356,13 +356,35 @@ async function simulateDeployment(server, password) {
                 // Step 9: Build Frontend Assets (85%)
                 await updateProgress(85);
                 await writeLog("-> Step 9/12: Bundling frontend production assets...");
+                // Automatically generate vite.config.js if missing (common in some templates) to resolve '@/*' path aliases
+                const ensureViteConfig = `if [ ! -f /var/www/${cleanDomain}/frontend/vite.config.js ] && [ ! -f /var/www/${cleanDomain}/frontend/vite.config.ts ] && [ ! -f /var/www/${cleanDomain}/frontend/vite.config.mjs ] && [ -f /var/www/${cleanDomain}/frontend/package.json ]; then
+                  echo "import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+});" > /var/www/${cleanDomain}/frontend/vite.config.js;
+                fi`;
+                await executeSshCommandStream(conn, ensureViteConfig, server._id, writeLog);
+
                 const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
                 await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
 
                 // Step 10: Launch application processes via PM2 (90%)
                 await updateProgress(90);
                 await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
-                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}"; else pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"; fi; pm2 save`;
+                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then pm2 start /var/www/${cleanDomain}/backend/server.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/backend/index.js ]; then pm2 start /var/www/${cleanDomain}/backend/index.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/server.js ]; then pm2 start /var/www/${cleanDomain}/server.js --name "${cleanDomain}"; else pm2 start /var/www/${cleanDomain}/index.js --name "${cleanDomain}"; fi; pm2 save`;
                 await executeSshCommandStream(conn, startPm2Cmd, server._id, writeLog);
 
                 // Step 11: Configure Nginx Reverse Proxy (95%)
@@ -370,7 +392,7 @@ async function simulateDeployment(server, password) {
                 await writeLog(`-> Step 11/12: Configuring Nginx virtual hosts reverse proxy for: ${cleanDomain}`);
                 
                 const writeNginxConfig = `
-                PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env || echo "5000")
+                PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env 2>/dev/null || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env 2>/dev/null || echo "5000")
                 cat << EOF > /etc/nginx/sites-available/${cleanDomain}
 server {
     listen 80;
@@ -382,7 +404,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:\\$PORT_VAL/;
+        proxy_pass http://127.0.0.1:\$PORT_VAL/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \\$http_upgrade;
         proxy_set_header Connection "upgrade";

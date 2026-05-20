@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_BASE } from '../config';
 import { Rocket, Lock, Mail, Loader2 } from 'lucide-react';
 
 const Login = ({ onLogin }) => {
@@ -13,7 +14,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post(`https://backend.cloudedata.in/api/login`, { email, password });
+      const res = await axios.post(`${API_BASE}/login`, { email, password });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
       onLogin(res.data.user);

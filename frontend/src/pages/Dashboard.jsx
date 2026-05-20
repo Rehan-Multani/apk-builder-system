@@ -5,7 +5,7 @@ import {
   Download, Loader2, Play, Info, Smartphone, AlertCircle, X, Settings, Package, XCircle 
 } from 'lucide-react';
 
-const API_BASE = `https://backend.cloudedata.in/api`;
+import { API_BASE, BACKEND_URL } from '../config';
 
 const Dashboard = () => {
   const [formData, setFormData] = useState({
@@ -714,14 +714,14 @@ const Dashboard = () => {
                     </div>
                     <div className="grid grid-cols-1 gap-3">
                       <a 
-                        href={`https://backend.cloudedata.in${status.result?.apkUrl}`} 
+                        href={`${BACKEND_URL}${status.result?.apkUrl}`} 
                         className="btn-primary !bg-green-600 hover:!bg-green-700 !py-2 !text-sm"
                         download
                       >
                         <Download size={16} /> Download APK (Install)
                       </a>
                       <a 
-                        href={`https://backend.cloudedata.in${status.result?.aabUrl}`} 
+                        href={`${BACKEND_URL}${status.result?.aabUrl}`} 
                         className="btn-secondary !border-green-500/30 !text-green-400 hover:!bg-green-500/10 !py-2 !text-sm"
                         download
                       >
@@ -729,7 +729,7 @@ const Dashboard = () => {
                       </a>
                       {status.result?.jksUrl && (
                         <a 
-                          href={`https://backend.cloudedata.in${status.result?.jksUrl}`} 
+                          href={`${BACKEND_URL}${status.result?.jksUrl}`} 
                           className="btn-secondary !border-slate-700 !text-slate-400 hover:!bg-slate-800 !py-2 !text-sm"
                           download
                         >

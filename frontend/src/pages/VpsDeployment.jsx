@@ -7,7 +7,7 @@ import {
   RefreshCw, Layers, DollarSign, X, Check, Key, Globe, Eye, FileText
 } from 'lucide-react';
 
-const API_BASE = `https://backend.cloudedata.in/api`;
+import { API_BASE } from '../config';
 
 const VpsDeployment = () => {
   const [servers, setServers] = useState([]);
