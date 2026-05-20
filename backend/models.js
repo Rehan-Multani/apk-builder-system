@@ -53,6 +53,7 @@ const vpsServerSchema = new mongoose.Schema({
     progress: { type: Number, default: 0 },
     logs: { type: [String], default: [] },
     localMongoUrl: { type: String },
+    localMongoUsername: { type: String },
     localMongoPassword: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }

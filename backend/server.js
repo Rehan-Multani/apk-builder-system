@@ -592,6 +592,7 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             progress: 0,
             logs: initialLogs,
             localMongoUrl,
+            localMongoUsername: 'db_user',
             localMongoPassword,
             userId: req.user._id
         });

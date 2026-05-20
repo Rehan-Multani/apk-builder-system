@@ -213,6 +213,16 @@ const ServerList = () => {
                             {server.localMongoUrl}
                           </div>
                           <div className="server-mongo-pass-row">
+                            <span>Username: <span style={{ color: '#fff', fontWeight: 'bold' }}>{server.localMongoUsername || 'db_user'}</span></span>
+                            <button
+                              onClick={() => copyToClipboard(server.localMongoUsername || 'db_user', `mongo-user-${server._id}`)}
+                              className="btn-icon-sm"
+                              title="Copy MongoDB Username"
+                            >
+                              {copiedId === `mongo-user-${server._id}` ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+                            </button>
+                          </div>
+                          <div className="server-mongo-pass-row">
                             <span>Password: <span style={{ color: '#fff', fontWeight: 'bold' }}>{server.localMongoPassword}</span></span>
                             <button
                               onClick={() => copyToClipboard(server.localMongoPassword, `mongo-pass-${server._id}`)}
