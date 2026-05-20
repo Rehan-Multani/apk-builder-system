@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import History from './pages/History';
 import Login from './pages/Login';
 import VpsDeployment from './pages/VpsDeployment';
+import ServerList from './pages/ServerList';
 
 function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
@@ -41,6 +42,10 @@ function App() {
             <Route 
               path="/vps" 
               element={user ? <VpsDeployment /> : <Navigate to="/login" />} 
+            />
+            <Route 
+              path="/servers" 
+              element={user ? <ServerList /> : <Navigate to="/login" />} 
             />
           </Routes>
         </main>

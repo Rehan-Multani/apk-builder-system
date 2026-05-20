@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, History, LogOut, Rocket, Server } from 'lucide-react';
+import { LayoutDashboard, History, LogOut, Rocket, Server, Activity } from 'lucide-react';
 
 const Navbar = ({ user, onLogout }) => {
   const location = useLocation();
@@ -43,6 +43,13 @@ const Navbar = ({ user, onLogout }) => {
             >
               <Server size={18} />
               <span className="font-medium hidden md:block">VPS Deploy</span>
+            </Link>
+            <Link
+              to="/servers"
+              className={`flex items-center gap-2 nav-link ${isActive('/servers') ? 'active' : ''}`}
+            >
+              <Activity size={18} />
+              <span className="font-medium hidden md:block">Server List</span>
             </Link>
           </div>
 
