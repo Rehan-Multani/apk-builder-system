@@ -408,7 +408,9 @@ EOF
         host: server.ipAddress,
         port: 22,
         username: server.username || 'root',
-        password: password
+        password: password,
+        readyTimeout: 60000,
+        keepaliveInterval: 10000
     });
 }
 
@@ -453,7 +455,15 @@ app.get('/api/vps/servers', authenticate, async (req, res) => {
 // Deploy new VPS
 app.post('/api/vps/deploy', authenticate, async (req, res) => {
     try {
-        const { name, ipAddress, username, password, domain, githubRepo, backendEnv, frontendEnv } = req.body;
+        const name = req.body.name?.trim() || '';
+        const ipAddress = req.body.ipAddress?.trim() || '';
+        const username = req.body.username?.trim() || 'root';
+        const password = req.body.password?.trim() || '';
+        const domain = req.body.domain?.trim() || '';
+        const githubRepo = req.body.githubRepo?.trim() || '';
+        const backendEnv = req.body.backendEnv || '';
+        const frontendEnv = req.body.frontendEnv || '';
+
         if (!name || !ipAddress || !domain || !githubRepo) {
             return res.status(400).json({ error: 'Name, IP Address, Domain and GitHub Repo URL are required' });
         }
