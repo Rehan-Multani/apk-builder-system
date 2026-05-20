@@ -120,7 +120,7 @@ const ServerList = () => {
               <p className="text-xs text-slate-500 mt-1 max-w-xs">Use the VPS Deploy tab to configure and launch your application stack.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="server-grid">
               <AnimatePresence>
                 {servers.map((server, idx) => (
                   <motion.div 
@@ -130,16 +130,16 @@ const ServerList = () => {
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.25, delay: idx * 0.05 }}
                     key={server._id}
-                    className="p-5 bg-slate-900/60 rounded-3xl border border-slate-800/80 hover:border-indigo-500/35 hover:bg-slate-900/90 transition-all space-y-4 shadow-lg flex flex-col justify-between"
+                    className="server-card"
                   >
                     <div>
                       {/* Server Header */}
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="server-card-header">
                         <div>
-                          <h4 className="font-bold text-base text-white flex items-center gap-1.5">
+                          <h4 className="server-card-name">
                             {server.name}
                           </h4>
-                          <p className="text-xs text-indigo-455 font-mono mt-0.5">
+                          <p className="server-card-domain">
                             {server.domain}
                           </p>
                         </div>
@@ -170,21 +170,21 @@ const ServerList = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between bg-slate-950/80 p-3 rounded-2xl border border-slate-850 mb-3">
-                          <span className="text-xs font-mono text-slate-300 font-bold">
+                        <div className="server-ip-box">
+                          <span className="server-ip-text">
                             {server.ipAddress}
                           </span>
-                          <div className="flex gap-1.5">
+                          <div className="server-copy-btn-group">
                             <button
                               onClick={() => copyToClipboard(server.ipAddress, `ip-${server._id}`)}
-                              className="p-1.5 text-slate-400 hover:text-white bg-slate-900 rounded-lg hover:bg-slate-800 border-none cursor-pointer transition-all"
+                              className="btn-icon-sm"
                               title="Copy IP"
                             >
                               {copiedId === `ip-${server._id}` ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
                             </button>
                             <button
                               onClick={() => copyToClipboard(`ssh ${server.username || 'root'}@${server.ipAddress}`, `ssh-${server._id}`)}
-                              className="p-1.5 text-slate-400 hover:text-white bg-slate-900 rounded-lg hover:bg-slate-800 border-none cursor-pointer flex items-center gap-1 text-[10px] font-bold transition-all"
+                              className="btn-icon-sm-text"
                               title="Copy SSH command"
                             >
                               {copiedId === `ssh-${server._id}` ? <Check size={12} className="text-green-500" /> : <Terminal size={12} />}
@@ -194,20 +194,51 @@ const ServerList = () => {
                         </div>
                       )}
 
+                      {/* Local MongoDB Credentials */}
+                      {server.localMongoUrl && (
+                        <div className="server-mongo-box">
+                          <div className="server-mongo-header">
+                            <span className="server-mongo-title">
+                              <Database size={11} /> Local MongoDB URL:
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(server.localMongoUrl, `mongo-url-${server._id}`)}
+                              className="btn-icon-sm"
+                              title="Copy Local MongoDB URL"
+                            >
+                              {copiedId === `mongo-url-${server._id}` ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+                            </button>
+                          </div>
+                          <div className="server-mongo-url" title={server.localMongoUrl}>
+                            {server.localMongoUrl}
+                          </div>
+                          <div className="server-mongo-pass-row">
+                            <span>Password: <span style={{ color: '#fff', fontWeight: 'bold' }}>{server.localMongoPassword}</span></span>
+                            <button
+                              onClick={() => copyToClipboard(server.localMongoPassword, `mongo-pass-${server._id}`)}
+                              className="btn-icon-sm"
+                              title="Copy MongoDB Password"
+                            >
+                              {copiedId === `mongo-pass-${server._id}` ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Config Specs */}
-                      <div className="flex justify-between items-center text-[10.5px] text-slate-400 font-mono border-t border-slate-850/80 pt-3">
-                        <span className="truncate max-w-[170px]" title={server.githubRepo}>🐙 {server.githubRepo.replace('https://github.com/', '')}</span>
+                      <div className="server-specs">
+                        <span className="server-specs-repo" title={server.githubRepo}>🐙 {server.githubRepo.replace('https://github.com/', '')}</span>
                         <span>👤 {server.username}</span>
                       </div>
                     </div>
 
                     {/* Server Actions */}
-                    <div className="flex gap-2 pt-2 mt-2">
+                    <div className="server-actions-row">
                       <motion.button
                         whileHover={{ scale: 1.01 }}
                         whileTap={{ scale: 0.99 }}
                         onClick={() => setSelectedServer(server)}
-                        className="flex-1 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-white rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center justify-center gap-1.5"
+                        className="btn-view-logs"
                       >
                         <Eye size={13} />
                         View Logs
@@ -215,14 +246,14 @@ const ServerList = () => {
                       <button
                         onClick={() => handleAction(server._id, 'reboot')}
                         disabled={server.status === 'deploying' || server.status === 'rebooting'}
-                        className="p-2.5 bg-slate-850 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 rounded-xl transition-all border-none cursor-pointer"
+                        className="btn-action-reboot"
                         title="Simulate Reboot"
                       >
                         <RotateCw size={13} className={server.status === 'rebooting' ? 'animate-spin' : ''} />
                       </button>
                       <button
                         onClick={() => handleAction(server._id, 'destroy')}
-                        className="p-2.5 bg-red-950/30 hover:bg-red-900/40 text-red-500 hover:text-red-400 border border-red-900/30 rounded-xl transition-all cursor-pointer border-none"
+                        className="btn-action-destroy"
                         title="Delete Deployment"
                       >
                         <Trash2 size={13} />

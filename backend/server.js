@@ -323,11 +323,45 @@ async function simulateDeployment(server, password) {
                 const pm2InstallCmd = `if ! command -v pm2 &> /dev/null; then echo "PM2 not found. Installing..." && npm install -g pm2; else echo "PM2 $(pm2 -v) is already installed."; fi`;
                 await executeSshCommandStream(conn, pm2InstallCmd, server._id, writeLog);
 
-                // Step 5: Install Nginx & Certbot & Git (50%)
+                // Step 5: Install Nginx & Certbot & Git & MongoDB (50%)
                 await updateProgress(50);
-                await writeLog("-> Step 5/12: Installing Nginx, Git, and Certbot dependencies...");
+                await writeLog("-> Step 5/12: Installing Nginx, Git, Certbot, and local MongoDB server...");
+                
+                // Let's install dependencies first
                 const depCmd = `apt-get install -y nginx git certbot python3-certbot-nginx`;
                 await executeSshCommandStream(conn, depCmd, server._id, writeLog);
+                
+                // Now let's run the MongoDB installation and setup commands
+                await writeLog("-> Installing MongoDB Community Edition locally...");
+                const mongoInstallCmd = `
+                if ! command -v mongod &> /dev/null; then
+                    echo "MongoDB not found. Fetching and installing MongoDB..."
+                    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg --yes || true
+                    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list || true
+                    export DEBIAN_FRONTEND=noninteractive
+                    apt-get update -y || true
+                    apt-get install -y mongodb-org || apt-get install -y mongodb || apt-get install -y mongodb-server || true
+                else
+                    echo "MongoDB is already installed on the target machine."
+                fi
+                systemctl daemon-reload || true
+                systemctl enable mongod || systemctl enable mongodb || true
+                systemctl start mongod || systemctl start mongodb || true
+                `;
+                await executeSshCommandStream(conn, mongoInstallCmd, server._id, writeLog);
+
+                // Now configure the database user
+                await writeLog("-> Configuring local MongoDB database and credentials...");
+                const mongoDbName = 'erp_school';
+                const mongoUser = 'db_user';
+                const mongoUserCmd = `
+                sleep 3
+                mongosh admin --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || \
+                mongo admin --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || \
+                mongosh ${mongoDbName} --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || \
+                mongo ${mongoDbName} --eval "db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]})" || true
+                `;
+                await executeSshCommandStream(conn, mongoUserCmd, server._id, writeLog);
 
                 // Step 6: Clone Git Repository (60%)
                 await updateProgress(60);
@@ -488,6 +522,30 @@ app.get('/api/vps/servers', authenticate, async (req, res) => {
     }
 });
 
+// Helper to inject local mongodb url in the env variables
+function updateMongoUrlInEnv(envString, newUrl) {
+    let updated = envString || '';
+    
+    // Replace MONGODB_URL if exists
+    const urlRegex = /^MONGODB_URL=.*$/m;
+    if (urlRegex.test(updated)) {
+        updated = updated.replace(urlRegex, `MONGODB_URL=${newUrl}`);
+    }
+    
+    // Replace MONGODB_URI if exists
+    const uriRegex = /^MONGODB_URI=.*$/m;
+    if (uriRegex.test(updated)) {
+        updated = updated.replace(uriRegex, `MONGODB_URI=${newUrl}`);
+    }
+    
+    // If neither exists, append MONGODB_URL
+    if (!urlRegex.test(updated) && !uriRegex.test(updated)) {
+        updated = updated.trim() ? updated.trim() + `\n\nMONGODB_URL=${newUrl}` : `MONGODB_URL=${newUrl}`;
+    }
+    
+    return updated;
+}
+
 // Deploy new VPS
 app.post('/api/vps/deploy', authenticate, async (req, res) => {
     try {
@@ -507,6 +565,12 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
         // Sanitize domain to remove protocols and trailing slashes
         const cleanDomain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
 
+        // Generate local MongoDB URL and password
+        const crypto = require('crypto');
+        const localMongoPassword = crypto.randomBytes(16).toString('hex');
+        const localMongoUrl = `mongodb://db_user:${localMongoPassword}@127.0.0.1:27017/erp_school?authSource=admin`;
+        const updatedBackendEnv = updateMongoUrlInEnv(backendEnv, localMongoUrl);
+
         const serverId = `vps-${uuidv4().substring(0, 8)}`;
         const initialLogs = [
             `[${new Date().toLocaleTimeString()}] [SYSTEM] Connecting to server SSH on root@${ipAddress}...`,
@@ -522,11 +586,13 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             username: username || 'root',
             domain: cleanDomain,
             githubRepo,
-            backendEnv,
+            backendEnv: updatedBackendEnv,
             frontendEnv,
             status: 'deploying',
             progress: 0,
             logs: initialLogs,
+            localMongoUrl,
+            localMongoPassword,
             userId: req.user._id
         });
 
