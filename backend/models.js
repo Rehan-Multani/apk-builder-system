@@ -40,4 +40,23 @@ const buildSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 const Build = mongoose.model('Build', buildSchema);
 
-module.exports = { User, Build };
+const vpsServerSchema = new mongoose.Schema({
+    serverId: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    ipAddress: { type: String, required: true },
+    username: { type: String, default: 'root' },
+    domain: { type: String, required: true },
+    githubRepo: { type: String, required: true },
+    backendEnv: { type: String },
+    frontendEnv: { type: String },
+    status: { type: String, default: 'deploying' },
+    progress: { type: Number, default: 0 },
+    logs: { type: [String], default: [] },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now }
+});
+
+const VpsServer = mongoose.model('VpsServer', vpsServerSchema);
+
+module.exports = { User, Build, VpsServer };
+
