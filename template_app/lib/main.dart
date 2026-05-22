@@ -496,7 +496,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                               'assets/launch_image.png',
                               width: 150,
                               height: 150,
-                              errorBuilder: (c, e, s) => const Icon(Icons.language, size: 80, color: Colors.indigo),
+                              errorBuilder: (c, e, s) => const SizedBox.shrink(),
                             );
                           },
                         ),
