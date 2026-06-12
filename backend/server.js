@@ -246,7 +246,7 @@ function executeSshCommandStream(conn, cmd, serverId, onLogLine) {
             }
         }
     };
-    
+
     return conn.execCommand(cmd, {
         onStdout: (chunk) => handleData(chunk),
         onStderr: (chunk) => handleData(chunk)
@@ -299,13 +299,13 @@ async function simulateDeployment(server, password) {
             });
 
             await writeLog("-> SSH Connection established successfully. Running deployment script...");
-            
+
             try {
                 // Step 1: System Checks (10%)
                 await updateProgress(10);
                 await writeLog("-> Step 1/12: Checking target OS details...");
                 await executeSshCommandStream(conn, "uname -a", server._id, writeLog);
-                
+
                 // Step 2: Update packages (20%)
                 await updateProgress(20);
                 await writeLog("-> Step 2/12: Running system package updates...");
@@ -319,7 +319,7 @@ async function simulateDeployment(server, password) {
                 fi
                 `;
                 await executeSshCommandStream(conn, updatePkgCmd, server._id, writeLog);
-                
+
                 // Step 3: Install Node.js (30%)
                 await updateProgress(30);
                 await writeLog("-> Step 3/12: Verifying Node.js environment...");
@@ -338,7 +338,7 @@ async function simulateDeployment(server, password) {
                 fi
                 `;
                 await executeSshCommandStream(conn, nodeInstallCmd, server._id, writeLog);
-                
+
                 // Step 4: Install PM2 (40%)
                 await updateProgress(40);
                 await writeLog("-> Step 4/12: Verifying PM2 process manager...");
@@ -348,7 +348,7 @@ async function simulateDeployment(server, password) {
                 // Step 5: Install Nginx & Certbot & Git & MongoDB (50%)
                 await updateProgress(50);
                 await writeLog("-> Step 5/12: Installing Nginx, Git, Certbot, and local MongoDB server...");
-                
+
                 // Let's install dependencies first
                 const depCmd = `
                 if command -v apt-get &> /dev/null; then
@@ -362,7 +362,7 @@ async function simulateDeployment(server, password) {
                 fi
                 `;
                 await executeSshCommandStream(conn, depCmd, server._id, writeLog);
-                
+
                 // Now let's run the MongoDB installation and setup commands
                 await writeLog("-> Installing MongoDB Community Edition locally...");
                 const mongoInstallCmd = `
@@ -401,9 +401,18 @@ EOF
 
                 // Now configure the database user
                 await writeLog("-> Configuring local MongoDB database and credentials...");
-                const mongoDbName = 'erp_school';
+                const mongoDbName = server.localMongoDbName || 'erp_school';
                 const mongoUser = 'db_user';
                 const mongoUserCmd = `
+                sleep 3
+                # Allow external connections to MongoDB so public IP works
+                if [ -f /etc/mongod.conf ]; then
+                    sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongod.conf
+                    systemctl restart mongod || true
+                elif [ -f /etc/mongodb.conf ]; then
+                    sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongodb.conf
+                    systemctl restart mongodb || true
+                fi
                 sleep 3
                 mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
                 mongo admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
@@ -475,7 +484,7 @@ export default defineConfig({
                 // Step 11: Configure Nginx Reverse Proxy (95%)
                 await updateProgress(95);
                 await writeLog(`-> Step 11/12: Configuring Nginx virtual hosts reverse proxy for: ${cleanDomain}`);
-                
+
                 const writeNginxConfig = `
                 PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env 2>/dev/null || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env 2>/dev/null || echo "5000")
                 mkdir -p /etc/nginx/conf.d
@@ -595,7 +604,7 @@ async function simulateRedeploy(server, password) {
     try {
         await updateProgress(10, 'deploying');
         await writeLog("-> Connecting to server SSH for code update...");
-        
+
         await conn.connect({
             host: server.ipAddress,
             port: 22,
@@ -672,10 +681,10 @@ app.post('/api/vps/redeploy', authenticate, async (req, res) => {
         await VpsServer.updateOne(
             { _id: serverId },
             {
-                $set: { 
-                    status: 'deploying', 
-                    progress: 0, 
-                    logs: [`[${new Date().toLocaleTimeString()}] [SYSTEM] Initiating code redeployment sequence...`] 
+                $set: {
+                    status: 'deploying',
+                    progress: 0,
+                    logs: [`[${new Date().toLocaleTimeString()}] [SYSTEM] Initiating code redeployment sequence...`]
                 }
             }
         );
@@ -704,24 +713,24 @@ app.get('/api/vps/servers', authenticate, async (req, res) => {
 // Helper to inject local mongodb url in the env variables
 function updateMongoUrlInEnv(envString, newUrl) {
     let updated = envString || '';
-    
+
     // Replace MONGODB_URL if exists
     const urlRegex = /^MONGODB_URL=.*$/m;
     if (urlRegex.test(updated)) {
         updated = updated.replace(urlRegex, `MONGODB_URL=${newUrl}`);
     }
-    
+
     // Replace MONGODB_URI if exists
     const uriRegex = /^MONGODB_URI=.*$/m;
     if (uriRegex.test(updated)) {
         updated = updated.replace(uriRegex, `MONGODB_URI=${newUrl}`);
     }
-    
+
     // If neither exists, append MONGODB_URL
     if (!urlRegex.test(updated) && !uriRegex.test(updated)) {
         updated = updated.trim() ? updated.trim() + `\n\nMONGODB_URL=${newUrl}` : `MONGODB_URL=${newUrl}`;
     }
-    
+
     return updated;
 }
 
@@ -741,13 +750,36 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'Name, IP Address, Domain and GitHub Repo URL are required' });
         }
 
+        // Helper to extract port from env variables (defaults to 5000)
+        const extractPort = (bEnv, fEnv) => {
+            const bMatch = bEnv?.match(/^PORT\s*=\s*(\d+)/m);
+            if (bMatch) return bMatch[1];
+            const fMatch = fEnv?.match(/^PORT\s*=\s*(\d+)/m);
+            if (fMatch) return fMatch[1];
+            return '5000';
+        };
+
+        const targetPort = extractPort(backendEnv, frontendEnv);
+
+        // Check for port collision on the same VPS IP address
+        const existingServers = await VpsServer.find({ ipAddress });
+        for (const s of existingServers) {
+            const sPort = extractPort(s.backendEnv, s.frontendEnv);
+            if (sPort === targetPort) {
+                return res.status(400).json({
+                    error: `Deployment Failed: Port ${targetPort} is already in use by another project (${s.name}) on this VPS. Please use a different PORT in your Environment variables.`
+                });
+            }
+        }
+
         // Sanitize domain to remove protocols and trailing slashes
         const cleanDomain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
 
-        // Generate local MongoDB URL and password
+        // Generate dynamic MongoDB DB Name and URL
         const crypto = require('crypto');
+        const localMongoDbName = name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'default_db';
         const localMongoPassword = crypto.randomBytes(16).toString('hex');
-        const localMongoUrl = `mongodb://db_user:${localMongoPassword}@127.0.0.1:27017/erp_school?authSource=admin`;
+        const localMongoUrl = `mongodb://db_user:${localMongoPassword}@${ipAddress}:27017/${localMongoDbName}?authSource=admin`;
         const updatedBackendEnv = updateMongoUrlInEnv(backendEnv, localMongoUrl);
 
         const serverId = `vps-${uuidv4().substring(0, 8)}`;
@@ -773,6 +805,8 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             localMongoUrl,
             localMongoUsername: 'db_user',
             localMongoPassword,
+            localMongoDbName,
+            port: targetPort,
             userId: req.user._id
         });
 

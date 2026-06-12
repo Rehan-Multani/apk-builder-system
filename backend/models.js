@@ -55,6 +55,8 @@ const vpsServerSchema = new mongoose.Schema({
     localMongoUrl: { type: String },
     localMongoUsername: { type: String },
     localMongoPassword: { type: String },
+    localMongoDbName: { type: String },
+    port: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
 });
