@@ -10,6 +10,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -212,10 +213,15 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
       _initFirebase();
 
-      await Future.delayed(Duration(seconds: splashDuration));
-      if (mounted) {
-        setState(() => isSplashFinished = true);
-      }
+      // Smart Splash Screen: We no longer use a fixed delay.
+      // The splash screen will be hidden automatically when the WebView reports 100% progress
+      // or when onLoadStop is triggered.
+      // Fallback max timeout just in case network is very slow
+      Future.delayed(const Duration(seconds: 10), () {
+        if (mounted && !isSplashFinished) {
+          setState(() => isSplashFinished = true);
+        }
+      });
     } catch (e) {
       debugPrint('Error loading config: $e');
       setState(() {
@@ -397,6 +403,26 @@ class _WebViewScreenState extends State<WebViewScreen> {
             });
           }
         });
+
+        controller.addJavaScriptHandler(handlerName: 'shareContent', callback: (args) async {
+          if (args.isNotEmpty) {
+            final data = args[0];
+            final url = data['url']?.toString() ?? '';
+            final title = data['title']?.toString() ?? '';
+            
+            if (url.isNotEmpty) {
+              await Share.share(
+                url,
+                subject: title,
+              );
+            } else if (data['text'] != null) {
+              await Share.share(
+                data['text'].toString(),
+                subject: title,
+              );
+            }
+          }
+        });
       },
       onPermissionRequest: (controller, request) async {
         return PermissionResponse(
@@ -412,6 +438,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
         setState(() {
           this.progress = progress / 100;
           if (progress > 50) isOffline = false;
+          // Smart Splash Screen: hide when progress reaches 100%
+          if (progress == 100) isSplashFinished = true;
+        });
+      },
+      onLoadStop: (controller, url) async {
+        pullToRefreshController?.endRefreshing();
+        setState(() {
+          isSplashFinished = true;
         });
       },
       onReceivedError: (controller, request, error) {
@@ -420,9 +454,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         var uri = navigationAction.request.url!;
         if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
-          if (await canLaunchUrl(uri)) {
+          try {
+            // Try to launch external intent (like upi://, phonepe://, intent://) directly
             await launchUrl(uri, mode: LaunchMode.externalApplication);
             return NavigationActionPolicy.CANCEL;
+          } catch (e) {
+            debugPrint("Could not launch $uri: $e");
           }
         }
         return NavigationActionPolicy.ALLOW;
@@ -482,7 +519,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
               if (!isSplashFinished)
                 Container(
-                  color: splashColor ?? Colors.white,
+                  color: Colors.white, // Background color removed, set to white
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -501,10 +538,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           },
                         ),
                         const SizedBox(height: 24),
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            (splashColor?.computeLuminance() ?? 0) > 0.5 ? Colors.black : Colors.white
-                          ),
+                        const CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
                         ),
                       ],
                     ),

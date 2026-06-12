@@ -9,8 +9,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://mohammadrehan00121_db_use
     .then(() => console.log('✅ Worker connected to MongoDB'))
     .catch(err => console.error('❌ Worker MongoDB connection error:', err));
 
-// Process Build Queue
-buildQueue.process('apk-build', async (job) => {
+// Process Build Queue (Concurrency: 1 to prevent server overload)
+buildQueue.process('apk-build', 1, async (job) => {
     const { buildId, url, appName, packageName, splashColor, splashMode } = job.data;
 
     try {
@@ -24,7 +24,7 @@ buildQueue.process('apk-build', async (job) => {
             job.progress(p);
             // Update DB progress periodically
             await Build.findOneAndUpdate({ buildId }, { progress: p });
-        });
+        }, job);
 
         console.log(`✅ [${buildId}] Build successful! APK: ${result.apkPath}`);
 
@@ -56,3 +56,26 @@ buildQueue.process('apk-build', async (job) => {
 });
 
 console.log('👷 Worker is active and waiting for jobs...');
+
+// Auto-Cleanup: Delete files older than 7 days from apk_storage
+const fsExtra = require('fs-extra');
+setInterval(async () => {
+    try {
+        const storageDir = path.join(__dirname, '../apk_storage');
+        if (await fsExtra.pathExists(storageDir)) {
+            const files = await fsExtra.readdir(storageDir);
+            const now = Date.now();
+            const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+            for (const file of files) {
+                const filePath = path.join(storageDir, file);
+                const stat = await fsExtra.stat(filePath);
+                if (now - stat.mtimeMs > SEVEN_DAYS) {
+                    await fsExtra.remove(filePath);
+                    console.log(`🧹 Deleted old file: ${file}`);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('❌ Auto-cleanup failed:', err);
+    }
+}, 24 * 60 * 60 * 1000); // Run once every 24 hours

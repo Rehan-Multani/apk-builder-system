@@ -24,7 +24,7 @@ function getBuildEnv() {
 /**
  * Main function to build APK and AAB
  */
-async function buildAPK(data, updateStatus) {
+async function buildAPK(data, updateStatus, job) {
     const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName, googleServicesPath, fcmStoreUrl, fcmBody, apiHeaders, splashDuration, useSafeArea, safeAreaTop, safeAreaBottom } = data;
     const baseDir = path.join(__dirname, '../');
     const templateDir = path.join(baseDir, 'template_app');
@@ -83,6 +83,10 @@ async function buildAPK(data, updateStatus) {
         // 3. Handle Icons and Splash Images
         if (iconPath && await fs.pathExists(iconPath)) {
             await generateAppIcons(buildDir, iconPath);
+            // Fallback: Use app icon as splash logo if no custom splash image is provided
+            if (!splashPath || !(await fs.pathExists(splashPath)) || splashMode !== 'image') {
+                await fs.copy(iconPath, path.join(buildDir, 'assets/splash.png'));
+            }
         }
         
         if (splashPath && await fs.pathExists(splashPath) && splashMode === 'image') {
@@ -104,13 +108,16 @@ async function buildAPK(data, updateStatus) {
                 });
 
                 child.stdout.on('data', (data) => {
-                    console.log(`[${buildId}] STDOUT: ${data}`);
+                    const logStr = data.toString();
+                    console.log(`[${buildId}] STDOUT: ${logStr.trim()}`);
+                    if (job && typeof job.log === 'function') job.log(`[OUT] ${logStr}`);
                 });
 
                 child.stderr.on('data', (data) => {
                     const str = data.toString();
                     errorOutput += str;
-                    console.error(`[${buildId}] STDERR: ${str}`);
+                    console.error(`[${buildId}] STDERR: ${str.trim()}`);
+                    if (job && typeof job.log === 'function') job.log(`[ERR] ${str}`);
                 });
 
                 child.on('close', (code) => {
@@ -133,18 +140,10 @@ async function buildAPK(data, updateStatus) {
         }
         
         updateStatus(56);
-        console.log(`[${buildId}] Cleaning build artifacts...`);
-        // Aggressive cleanup to prevent stale cache/plugin issues
-        await fs.remove(path.join(buildDir, '.dart_tool'));
-        await fs.remove(path.join(buildDir, 'pubspec.lock'));
-        await fs.remove(path.join(buildDir, 'build'));
-        await fs.remove(path.join(buildDir, 'android/.gradle'));
-        await fs.remove(path.join(buildDir, 'android/app/build'));
-        // Force regeneration of plugin registrant
-        await fs.remove(path.join(buildDir, 'android/app/src/main/java/io/flutter/plugins'));
-        await fs.remove(path.join(buildDir, 'android/app/src/main/kotlin/io/flutter/plugins'));
-        
-        await runBuild('flutter', ['clean']);
+        console.log(`[${buildId}] Preparing build artifacts...`);
+        // We skip aggressive cache clearing like `flutter clean` here to utilize global cache
+        // and reduce build time significantly from 7m to 1-2m.
+        if (job && typeof job.log === 'function') job.log(`[SYS] Skipping flutter clean to boost build speed...`);
 
         updateStatus(58);
         console.log(`[${buildId}] Fetching dependencies...`);
@@ -152,15 +151,15 @@ async function buildAPK(data, updateStatus) {
         
         updateStatus(59);
         console.log(`[${buildId}] Pre-caching Android engine artifacts...`);
-        await runBuild('flutter', ['precache', '--android']);
+        // await runBuild('flutter', ['precache', '--android']); // Precache can also be skipped if system is already prepared
         
         updateStatus(60);
-        console.log(`[${buildId}] Building APK...`);
-        await runBuild('flutter', ['build', 'apk', '--release', '--no-tree-shake-icons']);
+        console.log(`[${buildId}] Building APK with Obfuscation...`);
+        await runBuild('flutter', ['build', 'apk', '--release', '--obfuscate', '--split-debug-info=build/app/outputs/symbols']);
         
         updateStatus(80);
-        console.log(`[${buildId}] Building App Bundle...`);
-        await runBuild('flutter', ['build', 'appbundle', '--release', '--no-tree-shake-icons']);
+        console.log(`[${buildId}] Building App Bundle with Obfuscation...`);
+        await runBuild('flutter', ['build', 'appbundle', '--release', '--obfuscate', '--split-debug-info=build/app/outputs/symbols']);
         
         updateStatus(95);
 

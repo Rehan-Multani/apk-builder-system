@@ -197,15 +197,29 @@ app.get('/api/status/:jobId', async (req, res) => {
         else if (build.status === 'completed') state = 'completed';
         else if (build.status === 'failed') state = 'failed';
 
+        // Fetch Live Logs from Bull Queue
+        let logs = [];
+        try {
+            const job = await buildQueue.getJob(req.params.jobId);
+            if (job) {
+                const logsData = await job.getLogs();
+                logs = logsData.logs || [];
+            }
+        } catch (e) {
+            console.error('Failed to get logs for job:', e);
+        }
+
         res.json({
             id: build.buildId,
             state: state, // frontend expects waiting/active/completed/failed
             progress: build.progress || 0,
             result: build.status === 'completed' ? {
                 apkUrl: build.apkUrl,
-                aabUrl: build.aabUrl
+                aabUrl: build.aabUrl,
+                jksUrl: build.jksUrl
             } : null,
-            error: build.error
+            error: build.error,
+            logs: logs
         });
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch status' });
