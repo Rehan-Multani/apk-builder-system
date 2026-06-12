@@ -129,6 +129,33 @@ const ServerList = () => {
     setTimeout(() => setCopiedId(''), 2000);
   };
 
+  const [editEnvServer, setEditEnvServer] = useState(null);
+  const [backendEnv, setBackendEnv] = useState('');
+  const [frontendEnv, setFrontendEnv] = useState('');
+  const [savingEnv, setSavingEnv] = useState(false);
+
+  const handleSaveEnv = async (e) => {
+    e.preventDefault();
+    if (!editEnvServer) return;
+    setSavingEnv(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE}/vps/server/${editEnvServer._id}/env`, {
+        backendEnv,
+        frontendEnv
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('Environment variables saved! Please click "Redeploy" to apply them to the live server.');
+      setEditEnvServer(null);
+      fetchServers(true);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update environment variables');
+    } finally {
+      setSavingEnv(false);
+    }
+  };
+
   return (
     <div className="container py-8 animate-fade-in relative">
       {/* Dynamic Ambient Background Glows */}
@@ -292,6 +319,17 @@ const ServerList = () => {
                         <Eye size={13} />
                         View Logs
                       </motion.button>
+                      <button
+                        onClick={() => {
+                          setEditEnvServer(server);
+                          setBackendEnv(server.backendEnv || '');
+                          setFrontendEnv(server.frontendEnv || '');
+                        }}
+                        className="btn-action-edit"
+                        title="Edit Environment Variables"
+                      >
+                        <FileText size={13} />
+                      </button>
                       <button
                         onClick={() => setRedeployServer(server)}
                         disabled={server.status === 'deploying' || server.status === 'rebooting'}
@@ -544,6 +582,88 @@ const ServerList = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Environment Variables Modal */}
+      <AnimatePresence>
+        {editEnvServer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-slate-800/80 flex justify-between items-center bg-slate-950/40">
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <FileText className="text-indigo-400" size={18} />
+                  Edit Environment Variables ({editEnvServer.name})
+                </h3>
+                <button 
+                  onClick={() => setEditEnvServer(null)}
+                  className="p-1.5 bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-all border-none cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+                <p className="text-xs text-slate-400 mb-6 bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20">
+                  <strong className="text-indigo-300 flex items-center gap-1.5"><AlertTriangle size={14}/> Important:</strong> 
+                  After saving changes here, you must click the <strong>Redeploy</strong> button on this server to apply the new variables to the live VPS. The MongoDB URL is automatically managed, do not change it unless necessary.
+                </p>
+
+                <form id="editEnvForm" onSubmit={handleSaveEnv} className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                      Backend Environment (.env)
+                    </label>
+                    <textarea 
+                      className="w-full h-48 bg-black/50 border border-slate-700 rounded-xl p-3 text-[11px] font-mono text-indigo-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-y scrollbar-thin"
+                      value={backendEnv}
+                      onChange={(e) => setBackendEnv(e.target.value)}
+                      placeholder="PORT=5001&#10;JWT_SECRET=mysecret"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Frontend Environment (.env)
+                    </label>
+                    <textarea 
+                      className="w-full h-32 bg-black/50 border border-slate-700 rounded-xl p-3 text-[11px] font-mono text-purple-300 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-y scrollbar-thin"
+                      value={frontendEnv}
+                      onChange={(e) => setFrontendEnv(e.target.value)}
+                      placeholder="VITE_API_URL=https://api.domain.com"
+                    />
+                  </div>
+                </form>
+              </div>
+
+              <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditEnvServer(null)}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all border-none cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="editEnvForm"
+                  disabled={savingEnv}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {savingEnv ? (
+                    <><RefreshCw size={14} className="animate-spin" /> Saving...</>
+                  ) : (
+                    <><Check size={14} /> Save Variables</>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

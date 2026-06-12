@@ -22,6 +22,9 @@ const VpsDeployment = () => {
     password: '',
     domain: '',
     githubRepo: '',
+    backendDir: 'backend',
+    frontendDir: 'frontend',
+    mongoEnvVarName: 'MONGODB_URL',
     backendEnv: '',
     frontendEnv: ''
   });
@@ -43,11 +46,18 @@ const VpsDeployment = () => {
         password: '',
         domain: '',
         githubRepo: '',
+        backendDir: 'backend',
+        frontendDir: 'frontend',
+        mongoEnvVarName: 'MONGODB_URL',
         backendEnv: '',
         frontendEnv: ''
       });
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to trigger VPS deployment');
+      if (err.response?.data?.warning) {
+        alert(`⚠️ NOTICE:\n${err.response.data.warning}`);
+      } else {
+        alert(err.response?.data?.error || 'Failed to trigger VPS deployment');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -178,6 +188,55 @@ const VpsDeployment = () => {
                         placeholder="e.g. https://github.com/username/my-fullstack-app"
                         value={formData.githubRepo}
                         onChange={(e) => setFormData({...formData, githubRepo: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Directory Names Row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                        <Terminal size={16} /> Backend Directory Name
+                      </label>
+                      <div className="input-group">
+                        <input 
+                          type="text" 
+                          placeholder="e.g. backend or admin-backend"
+                          value={formData.backendDir}
+                          onChange={(e) => setFormData({...formData, backendDir: e.target.value})}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                        <Terminal size={16} /> Frontend Directory Name
+                      </label>
+                      <div className="input-group">
+                        <input 
+                          type="text" 
+                          placeholder="e.g. frontend or admin-frontend"
+                          value={formData.frontendDir}
+                          onChange={(e) => setFormData({...formData, frontendDir: e.target.value})}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MongoDB Env Var Name */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                      <Database size={16} /> MongoDB Env Variable Name
+                    </label>
+                    <div className="input-group">
+                      <input 
+                        type="text" 
+                        placeholder="e.g. MONGODB_URL, DATABASE_URI, MONGO_CONNECTION_STRING"
+                        value={formData.mongoEnvVarName}
+                        onChange={(e) => setFormData({...formData, mongoEnvVarName: e.target.value})}
                         required
                       />
                     </div>

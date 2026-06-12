@@ -301,10 +301,25 @@ async function simulateDeployment(server, password) {
             await writeLog("-> SSH Connection established successfully. Running deployment script...");
 
             try {
-                // Step 1: System Checks (10%)
+                // Step 1: System Checks & Memory Optimization (10%)
                 await updateProgress(10);
-                await writeLog("-> Step 1/12: Checking target OS details...");
+                await writeLog("-> Step 1/12: Checking target OS details and configuring Swap Memory...");
                 await executeSshCommandStream(conn, "uname -a", server._id, writeLog);
+
+                // Create a 1GB Swap file if it doesn't exist to prevent out-of-memory errors during build
+                const createSwapCmd = `
+                if [ ! -f /swapfile ]; then
+                    echo "-> Creating 1GB swap file to prevent RAM exhaustion..."
+                    fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+                    chmod 600 /swapfile
+                    mkswap /swapfile
+                    swapon /swapfile
+                    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+                else
+                    echo "-> Swap file already exists."
+                fi
+                `;
+                await executeSshCommandStream(conn, createSwapCmd, server._id, writeLog);
 
                 // Step 2: Update packages (20%)
                 await updateProgress(20);
@@ -405,53 +420,60 @@ EOF
                 const mongoUser = 'db_user';
                 const mongoUserCmd = `
                 sleep 3
-                # Allow external connections to MongoDB so public IP works
-                if [ -f /etc/mongod.conf ]; then
-                    sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongod.conf
-                    systemctl restart mongod || true
-                elif [ -f /etc/mongodb.conf ]; then
-                    sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongodb.conf
-                    systemctl restart mongodb || true
-                fi
-                sleep 3
                 mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
                 mongo admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
                 mongosh ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
                 mongo ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'readWrite', db: '${mongoDbName}'}, {role: 'dbAdmin', db: '${mongoDbName}'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || true
+
+                # Allow external connections AND ENABLE AUTHENTICATION for cross-VPS access
+                if [ -f /etc/mongod.conf ]; then
+                    sed -i -E 's/bindIp:\\s*127\\.0\\.0\\.1.*/bindIp: 0.0.0.0/' /etc/mongod.conf
+                    if ! grep -q "authorization: enabled" /etc/mongod.conf; then
+                        echo -e "\\nsecurity:\\n  authorization: enabled" >> /etc/mongod.conf
+                    fi
+                    systemctl restart mongod || true
+                elif [ -f /etc/mongodb.conf ]; then
+                    sed -i -E 's/bindIp:\\s*127\\.0\\.0\\.1.*/bindIp: 0.0.0.0/' /etc/mongodb.conf
+                    if ! grep -q "authorization: enabled" /etc/mongodb.conf; then
+                        echo -e "\\nsecurity:\\n  authorization: enabled" >> /etc/mongodb.conf
+                    fi
+                    systemctl restart mongodb || true
+                fi
+                sleep 3
                 `;
                 await executeSshCommandStream(conn, mongoUserCmd, server._id, writeLog);
 
                 // Step 6: Clone Git Repository (60%)
                 await updateProgress(60);
                 await writeLog(`-> Step 6/12: Cloning repository from: ${server.githubRepo}...`);
-                const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then CURRENT_URL=\$(git config --get remote.origin.url 2>/dev/null || echo ""); if [ "\$CURRENT_URL" != "${server.githubRepo}" ] && [ "\$CURRENT_URL" != "${server.githubRepo}.git" ]; then echo "Repository changed! Re-cloning..." && find . -mindepth 1 -delete 2>/dev/null || true && git clone ${server.githubRepo} .; else echo "Directory exists. Pulling updates..." && git fetch --all && git reset --hard origin/main || git reset --hard origin/master; fi; else echo "Cloning clean repository..." && find . -mindepth 1 -delete 2>/dev/null || true && git clone ${server.githubRepo} .; fi`;
+                const cloneCmd = `mkdir -p /var/www/${cleanDomain} && cd /var/www/${cleanDomain} && if [ -d .git ]; then CURRENT_URL=\$(git config --get remote.origin.url 2>/dev/null || echo ""); if [ "\$CURRENT_URL" != "${server.githubRepo}" ] && [ "\$CURRENT_URL" != "${server.githubRepo}.git" ]; then echo "Repository changed! Re-cloning..." && find . -mindepth 1 -delete 2>/dev/null || true && GIT_TERMINAL_PROMPT=0 git clone ${server.githubRepo} .; else echo "Directory exists. Pulling updates..." && GIT_TERMINAL_PROMPT=0 git fetch --all && GIT_TERMINAL_PROMPT=0 git reset --hard origin/main || GIT_TERMINAL_PROMPT=0 git reset --hard origin/master; fi; else echo "Cloning clean repository..." && find . -mindepth 1 -delete 2>/dev/null || true && GIT_TERMINAL_PROMPT=0 git clone ${server.githubRepo} .; fi`;
                 await executeSshCommandStream(conn, cloneCmd, server._id, writeLog);
 
                 // Step 7: Write Env Configuration files (70%)
                 await updateProgress(70);
                 await writeLog("-> Step 7/12: Writing backend and frontend env configuration files...");
                 const backendEnvBase64 = Buffer.from(server.backendEnv || '').toString('base64');
-                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/backend && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/backend/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
+                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir} && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
                 await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
 
                 const frontendEnvBase64 = Buffer.from(server.frontendEnv || '').toString('base64');
-                const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/frontend && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/frontend/.env && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env.production`;
+                const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/${server.frontendDir} && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.frontendDir}/.env && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env.production`;
                 await executeSshCommandStream(conn, writeFrontendEnv, server._id, writeLog);
 
                 // Step 8: Install Dependencies (80%)
                 await updateProgress(80);
                 await writeLog("-> Step 8/12: Installing npm dependencies...");
-                const installBackendDeps = `if [ -f /var/www/${cleanDomain}/backend/package.json ]; then cd /var/www/${cleanDomain}/backend && npm install; elif [ -f /var/www/${cleanDomain}/package.json ]; then cd /var/www/${cleanDomain} && npm install; fi`;
+                const installBackendDeps = `if [ -f /var/www/${cleanDomain}/${server.backendDir}/package.json ]; then cd /var/www/${cleanDomain}/${server.backendDir} && npm install; elif [ -f /var/www/${cleanDomain}/package.json ]; then cd /var/www/${cleanDomain} && npm install; fi`;
                 await executeSshCommandStream(conn, installBackendDeps, server._id, writeLog);
 
-                const installFrontendDeps = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm install; fi`;
+                const installFrontendDeps = `if [ -f /var/www/${cleanDomain}/${server.frontendDir}/package.json ]; then cd /var/www/${cleanDomain}/${server.frontendDir} && npm install; fi`;
                 await executeSshCommandStream(conn, installFrontendDeps, server._id, writeLog);
 
                 // Step 9: Build Frontend Assets (85%)
                 await updateProgress(85);
                 await writeLog("-> Step 9/12: Bundling frontend production assets...");
                 // Automatically generate vite.config.js if missing (common in some templates) to resolve '@/*' path aliases
-                const ensureViteConfig = `if [ ! -f /var/www/${cleanDomain}/frontend/vite.config.js ] && [ ! -f /var/www/${cleanDomain}/frontend/vite.config.ts ] && [ ! -f /var/www/${cleanDomain}/frontend/vite.config.mjs ] && [ -f /var/www/${cleanDomain}/frontend/package.json ]; then
+                const ensureViteConfig = `if [ ! -f /var/www/${cleanDomain}/${server.frontendDir}/vite.config.js ] && [ ! -f /var/www/${cleanDomain}/${server.frontendDir}/vite.config.ts ] && [ ! -f /var/www/${cleanDomain}/${server.frontendDir}/vite.config.mjs ] && [ -f /var/www/${cleanDomain}/${server.frontendDir}/package.json ]; then
                   echo "import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -468,17 +490,31 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-});" > /var/www/${cleanDomain}/frontend/vite.config.js;
+});" > /var/www/${cleanDomain}/${server.frontendDir}/vite.config.js;
                 fi`;
                 await executeSshCommandStream(conn, ensureViteConfig, server._id, writeLog);
 
-                const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then cd /var/www/${cleanDomain}/frontend && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
-                await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
+                const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/${server.frontendDir}/package.json ]; then cd /var/www/${cleanDomain}/${server.frontendDir} && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
+                const buildCode = await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
+                
+                if (buildCode !== 0) {
+                    throw new Error('Frontend React/Vite build failed due to syntax or import errors in your project code. Please check the logs above to fix your code, push to GitHub, and try Redeploying.');
+                }
 
                 // Step 10: Launch application processes via PM2 (90%)
                 await updateProgress(90);
                 await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
-                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; if [ -f /var/www/${cleanDomain}/backend/server.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start server.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/backend/index.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start index.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/server.js ]; then cd /var/www/${cleanDomain} && pm2 start server.js --name "${cleanDomain}"; else cd /var/www/${cleanDomain} && pm2 start index.js --name "${cleanDomain}"; fi; pm2 save`;
+                // Configure UFW Firewall if active
+                const firewallCmd = `
+                if command -v ufw &> /dev/null; then
+                    ufw allow 80/tcp || true
+                    ufw allow 443/tcp || true
+                    ufw allow 27017/tcp || true
+                fi
+                `;
+                await executeSshCommandStream(conn, firewallCmd, server._id, writeLog);
+
+                const startPm2Cmd = `pm2 delete ${cleanDomain} || true; cd /var/www/${cleanDomain}/${server.backendDir}; if [ -f server.js ]; then pm2 start server.js --name "${cleanDomain}"; elif [ -f index.js ]; then pm2 start index.js --name "${cleanDomain}"; elif [ -f app.js ]; then pm2 start app.js --name "${cleanDomain}"; else echo "ERROR: Could not find main file (server.js, index.js, or app.js) in backend directory!"; fi; pm2 save; env PATH=\\$PATH:/usr/bin pm2 startup systemd -u root --hp /root || true`;
                 await executeSshCommandStream(conn, startPm2Cmd, server._id, writeLog);
 
                 // Step 11: Configure Nginx Reverse Proxy (95%)
@@ -486,7 +522,13 @@ export default defineConfig({
                 await writeLog(`-> Step 11/12: Configuring Nginx virtual hosts reverse proxy for: ${cleanDomain}`);
 
                 const writeNginxConfig = `
-                PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/backend/.env 2>/dev/null || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env 2>/dev/null || echo "5000")
+                PORT_VAL=\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/${server.backendDir}/.env 2>/dev/null || grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/.env 2>/dev/null || echo "5000")
+                
+                FRONTEND_ROOT="/var/www/${cleanDomain}/${server.frontendDir}/dist"
+                if [ -d "/var/www/${cleanDomain}/${server.frontendDir}/build" ]; then
+                    FRONTEND_ROOT="/var/www/${cleanDomain}/${server.frontendDir}/build"
+                fi
+
                 mkdir -p /etc/nginx/conf.d
                 cat << EOF > /etc/nginx/conf.d/${cleanDomain}.conf
 server {
@@ -494,7 +536,7 @@ server {
     server_name ${cleanDomain};
 
     location / {
-        root /var/www/${cleanDomain}/frontend/dist;
+        root $FRONTEND_ROOT;
         try_files \\$uri \\$uri/ /index.html;
     }
 
@@ -622,35 +664,51 @@ async function simulateRedeploy(server, password) {
         // Step 1: Git pull / fetch and reset
         await updateProgress(30);
         await writeLog(`-> Step 1/3: Pulling latest commits from GitHub repository: ${server.githubRepo}`);
-        const gitPullCmd = `cd /var/www/${cleanDomain} && git fetch --all && (git reset --hard origin/main || git reset --hard origin/master || git reset --hard origin/default)`;
+        const gitPullCmd = `cd /var/www/${cleanDomain} && GIT_TERMINAL_PROMPT=0 git fetch --all && (GIT_TERMINAL_PROMPT=0 git reset --hard origin/main || GIT_TERMINAL_PROMPT=0 git reset --hard origin/master || GIT_TERMINAL_PROMPT=0 git reset --hard origin/default)`;
         await executeSshCommandStream(conn, gitPullCmd, server._id, writeLog);
+
+        // Update Environment Variables
+        await updateProgress(45);
+        await writeLog("-> Updating backend and frontend environment variables (.env files)...");
+        
+        const backendEnvBase64 = Buffer.from(server.backendEnv || '').toString('base64');
+        const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir} && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
+        await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
+
+        const frontendEnvBase64 = Buffer.from(server.frontendEnv || '').toString('base64');
+        const writeFrontendEnv = `mkdir -p /var/www/${cleanDomain}/${server.frontendDir} && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.frontendDir}/.env && echo "${frontendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env.production`;
+        await executeSshCommandStream(conn, writeFrontendEnv, server._id, writeLog);
 
         // Step 2: Install backend dependencies & restart PM2
         await updateProgress(60);
         await writeLog("-> Step 2/3: Installing backend node_modules and restarting PM2 process...");
         const updateBackend = `
-        if [ -f /var/www/${cleanDomain}/backend/package.json ]; then
-            cd /var/www/${cleanDomain}/backend && npm install
+        if [ -f /var/www/${cleanDomain}/${server.backendDir}/package.json ]; then
+            cd /var/www/${cleanDomain}/${server.backendDir} && npm install
         elif [ -f /var/www/${cleanDomain}/package.json ]; then
             cd /var/www/${cleanDomain} && npm install
         fi
         `;
         await executeSshCommandStream(conn, updateBackend, server._id, writeLog);
 
-        const pm2RestartCmd = `pm2 restart "${cleanDomain}" || (if [ -f /var/www/${cleanDomain}/backend/server.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start server.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/backend/index.js ]; then cd /var/www/${cleanDomain}/backend && pm2 start index.js --name "${cleanDomain}"; elif [ -f /var/www/${cleanDomain}/server.js ]; then cd /var/www/${cleanDomain} && pm2 start server.js --name "${cleanDomain}"; else cd /var/www/${cleanDomain} && pm2 start index.js --name "${cleanDomain}"; fi; pm2 save)`;
+        const pm2RestartCmd = `pm2 restart "${cleanDomain}" || (cd /var/www/${cleanDomain}/${server.backendDir}; if [ -f server.js ]; then pm2 start server.js --name "${cleanDomain}"; elif [ -f index.js ]; then pm2 start index.js --name "${cleanDomain}"; elif [ -f app.js ]; then pm2 start app.js --name "${cleanDomain}"; else echo "ERROR: Could not find main file (server.js, index.js, or app.js) in backend directory!"; fi; pm2 save)`;
         await executeSshCommandStream(conn, pm2RestartCmd, server._id, writeLog);
 
         // Step 3: Install frontend dependencies & run build
         await updateProgress(85);
         await writeLog("-> Step 3/3: Installing frontend node_modules and rebuilding production bundle...");
         const updateFrontend = `
-        if [ -f /var/www/${cleanDomain}/frontend/package.json ]; then
-            cd /var/www/${cleanDomain}/frontend && npm install && npm run build
+        if [ -f /var/www/${cleanDomain}/${server.frontendDir}/package.json ]; then
+            cd /var/www/${cleanDomain}/${server.frontendDir} && npm install && npm run build
         elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then
             cd /var/www/${cleanDomain} && npm run build
         fi
         `;
-        await executeSshCommandStream(conn, updateFrontend, server._id, writeLog);
+        const rbCode = await executeSshCommandStream(conn, updateFrontend, server._id, writeLog);
+        
+        if (rbCode !== 0) {
+            throw new Error('Frontend Redeployment Build failed due to errors in your React code. Check the logs above, fix the issues in your repository, and Redeploy again.');
+        }
 
         await writeLog("[SUCCESS] Redeployment completed successfully! Your site is running the latest updates.");
         await updateProgress(100, 'active');
@@ -711,24 +769,16 @@ app.get('/api/vps/servers', authenticate, async (req, res) => {
 });
 
 // Helper to inject local mongodb url in the env variables
-function updateMongoUrlInEnv(envString, newUrl) {
+function updateMongoUrlInEnv(envString, newUrl, varName = 'MONGODB_URL') {
     let updated = envString || '';
 
-    // Replace MONGODB_URL if exists
-    const urlRegex = /^MONGODB_URL=.*$/m;
-    if (urlRegex.test(updated)) {
-        updated = updated.replace(urlRegex, `MONGODB_URL=${newUrl}`);
-    }
-
-    // Replace MONGODB_URI if exists
-    const uriRegex = /^MONGODB_URI=.*$/m;
-    if (uriRegex.test(updated)) {
-        updated = updated.replace(uriRegex, `MONGODB_URI=${newUrl}`);
-    }
-
-    // If neither exists, append MONGODB_URL
-    if (!urlRegex.test(updated) && !uriRegex.test(updated)) {
-        updated = updated.trim() ? updated.trim() + `\n\nMONGODB_URL=${newUrl}` : `MONGODB_URL=${newUrl}`;
+    // Replace the exact varName if exists
+    const regex = new RegExp(`^${varName}=.*$`, 'm');
+    if (regex.test(updated)) {
+        updated = updated.replace(regex, `${varName}=${newUrl}`);
+    } else {
+        // If it doesn't exist, append it at the bottom
+        updated = updated.trim() ? updated.trim() + `\n\n${varName}=${newUrl}` : `${varName}=${newUrl}`;
     }
 
     return updated;
@@ -745,9 +795,17 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
         const githubRepo = req.body.githubRepo?.trim() || '';
         const backendEnv = req.body.backendEnv || '';
         const frontendEnv = req.body.frontendEnv || '';
+        const backendDir = req.body.backendDir?.trim() || 'backend';
+        const frontendDir = req.body.frontendDir?.trim() || 'frontend';
+        const mongoEnvVarName = req.body.mongoEnvVarName?.trim() || 'MONGODB_URL';
 
         if (!name || !ipAddress || !domain || !githubRepo) {
             return res.status(400).json({ error: 'Name, IP Address, Domain and GitHub Repo URL are required' });
+        }
+
+        // Strictly enforce HTTPS GitHub URL to prevent SSH clone prompts from hanging
+        if (!/^https:\/\/(?:[a-zA-Z0-9_-]+(?:[:][a-zA-Z0-9_-]+)?@)?github\.com\//i.test(githubRepo)) {
+            return res.status(409).json({ warning: 'GitHub URL must be an HTTPS URL (e.g., https://github.com/... or https://<token>@github.com/...). SSH formats like git@github.com are not supported.' });
         }
 
         // Helper to extract port from env variables (defaults to 5000)
@@ -759,28 +817,41 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             return '5000';
         };
 
-        const targetPort = extractPort(backendEnv, frontendEnv);
-
-        // Check for port collision on the same VPS IP address
-        const existingServers = await VpsServer.find({ ipAddress });
-        for (const s of existingServers) {
-            const sPort = extractPort(s.backendEnv, s.frontendEnv);
-            if (sPort === targetPort) {
-                return res.status(400).json({
-                    error: `Deployment Failed: Port ${targetPort} is already in use by another project (${s.name}) on this VPS. Please use a different PORT in your Environment variables.`
-                });
-            }
+        // Globally verify that the Server Label (name) is unique
+        const existingName = await VpsServer.findOne({ name: { $regex: new RegExp('^' + name + '$', 'i') } });
+        if (existingName) {
+            return res.status(409).json({ warning: `The Server Label "${name}" is already in use by another project. Please choose a unique name to avoid database conflicts.` });
         }
+
+        const targetPort = extractPort(backendEnv, frontendEnv);
 
         // Sanitize domain to remove protocols and trailing slashes
         const cleanDomain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+
+        // Globally verify that the Domain is not already linked to another VPS
+        const existingDomain = await VpsServer.findOne({ domain: cleanDomain });
+        if (existingDomain) {
+            return res.status(409).json({ warning: `The domain "${cleanDomain}" is already linked to another VPS (${existingDomain.ipAddress}). Please use a different domain or remove the existing deployment.` });
+        }
+
+        // Check for collisions on the SAME VPS (IP Address)
+        const existingServers = await VpsServer.find({ ipAddress });
+        for (const s of existingServers) {
+            // Same Port on same VPS
+            const sPort = extractPort(s.backendEnv, s.frontendEnv);
+            if (sPort === targetPort) {
+                return res.status(409).json({
+                    warning: `Port ${targetPort} is currently being used by another project (${s.name}) on this VPS. Please assign a different PORT in your environment variables to prevent conflicts.`
+                });
+            }
+        }
 
         // Generate dynamic MongoDB DB Name and URL
         const crypto = require('crypto');
         const localMongoDbName = name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'default_db';
         const localMongoPassword = crypto.randomBytes(16).toString('hex');
         const localMongoUrl = `mongodb://db_user:${localMongoPassword}@${ipAddress}:27017/${localMongoDbName}?authSource=admin`;
-        const updatedBackendEnv = updateMongoUrlInEnv(backendEnv, localMongoUrl);
+        const updatedBackendEnv = updateMongoUrlInEnv(backendEnv, localMongoUrl, mongoEnvVarName);
 
         const serverId = `vps-${uuidv4().substring(0, 8)}`;
         const initialLogs = [
@@ -807,6 +878,9 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             localMongoPassword,
             localMongoDbName,
             port: targetPort,
+            backendDir,
+            frontendDir,
+            mongoEnvVarName,
             userId: req.user._id
         });
 
@@ -852,6 +926,24 @@ app.post('/api/vps/server/:id/action', authenticate, async (req, res) => {
         }
     } catch (err) {
         res.status(500).json({ error: 'Failed to process server action' });
+    }
+});
+
+// Update server environment variables
+app.put('/api/vps/server/:id/env', authenticate, async (req, res) => {
+    try {
+        const { backendEnv, frontendEnv } = req.body;
+        const server = await VpsServer.findOne({ _id: req.params.id, userId: req.user._id });
+        
+        if (!server) return res.status(404).json({ error: 'Server not found' });
+
+        server.backendEnv = backendEnv;
+        server.frontendEnv = frontendEnv;
+        await server.save();
+
+        res.json({ message: 'Environment variables updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update environment variables' });
     }
 });
 

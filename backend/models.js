@@ -57,6 +57,9 @@ const vpsServerSchema = new mongoose.Schema({
     localMongoPassword: { type: String },
     localMongoDbName: { type: String },
     port: { type: String },
+    backendDir: { type: String, default: 'backend' },
+    frontendDir: { type: String, default: 'frontend' },
+    mongoEnvVarName: { type: String, default: 'MONGODB_URL' },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
 });
