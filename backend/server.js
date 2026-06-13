@@ -457,10 +457,20 @@ EOF
                     sleep 3
                 fi
 
-                mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
-                mongo admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
-                mongosh ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
-                mongo ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || true
+                # Wait for MongoDB to start listening on port 27017
+                echo "Waiting for MongoDB to initialize..."
+                for i in {1..30}; do
+                    if ss -tuln | grep -q ":27017 " || netstat -tuln | grep -q ":27017 "; then
+                        echo "MongoDB is up."
+                        sleep 2 # Extra safety margin
+                        break
+                    fi
+                    echo "Waiting for port 27017..."
+                    sleep 1
+                done
+
+                mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.updateUser('${mongoUser}', {pwd: '${server.localMongoPassword}'}) }" || \
+                mongo admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.updateUser('${mongoUser}', {pwd: '${server.localMongoPassword}'}) }" || true
 
                 # Allow external connections AND ENABLE AUTHENTICATION for cross-VPS access
                 if [ -f /etc/mongod.conf ]; then
@@ -468,6 +478,7 @@ EOF
                     sed -i -E 's/^#security:/security:/g' /etc/mongod.conf 2>/dev/null || true
                     sed -i -E 's/^#\\s*authorization: enabled/  authorization: enabled/g' /etc/mongod.conf 2>/dev/null || true
                     if ! grep -E -q "^\\s*authorization: enabled" /etc/mongod.conf; then
+                        sed -i -E '/^security:\s*$/d' /etc/mongod.conf 2>/dev/null || true
                         echo -e "\\nsecurity:\\n  authorization: enabled" >> /etc/mongod.conf
                     fi
                     systemctl restart mongod || true
@@ -476,6 +487,7 @@ EOF
                     sed -i -E 's/^#security:/security:/g' /etc/mongodb.conf 2>/dev/null || true
                     sed -i -E 's/^#\\s*authorization: enabled/  authorization: enabled/g' /etc/mongodb.conf 2>/dev/null || true
                     if ! grep -E -q "^\\s*authorization: enabled" /etc/mongodb.conf; then
+                        sed -i -E '/^security:\s*$/d' /etc/mongodb.conf 2>/dev/null || true
                         echo -e "\\nsecurity:\\n  authorization: enabled" >> /etc/mongodb.conf
                     fi
                     systemctl restart mongodb || true
