@@ -568,11 +568,17 @@ export default defineConfig({
                 await updateProgress(90);
                 await writeLog("-> Step 10/12: Starting Node application processes via PM2 daemon...");
                 // Configure UFW Firewall if active
+                const superAdminIp = process.env.SUPERADMIN_IP || '210.56.147.234';
                 const firewallCmd = `
                 if command -v ufw &> /dev/null; then
                     ufw allow 80/tcp || true
                     ufw allow 443/tcp || true
-                    ufw allow 27017/tcp || true
+                    
+                    # Remove the old insecure public rule if it exists
+                    ufw delete allow 27017/tcp 2>/dev/null || true
+                    
+                    # Secure MongoDB: Allow ONLY the SuperAdmin VPS to connect to port 27017
+                    ufw allow from ${superAdminIp} to any port 27017 || true
                 fi
                 `;
                 await executeSshCommandStream(conn, firewallCmd, server._id, writeLog);
