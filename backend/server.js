@@ -434,7 +434,14 @@ EOF
                 const mongoDbName = server.localMongoDbName || 'erp_school';
                 const mongoUser = server.localMongoUsername || 'db_user';
                 const mongoUserCmd = `
-                sleep 3
+                # Temporarily disable auth to create the new user if it was already enabled
+                if grep -q "authorization: enabled" /etc/mongod.conf 2>/dev/null || grep -q "authorization: enabled" /etc/mongodb.conf 2>/dev/null; then
+                    sed -i -E 's/authorization: enabled/#authorization: enabled/g' /etc/mongod.conf 2>/dev/null || true
+                    sed -i -E 's/authorization: enabled/#authorization: enabled/g' /etc/mongodb.conf 2>/dev/null || true
+                    systemctl restart mongod || systemctl restart mongodb || true
+                    sleep 3
+                fi
+
                 mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
                 mongo admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
                 mongosh ${mongoDbName} --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
