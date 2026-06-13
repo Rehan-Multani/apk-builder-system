@@ -436,8 +436,10 @@ EOF
                 const mongoUserCmd = `
                 # Temporarily disable auth to create the new user if it was already enabled
                 if grep -q "authorization: enabled" /etc/mongod.conf 2>/dev/null || grep -q "authorization: enabled" /etc/mongodb.conf 2>/dev/null; then
-                    sed -i -E 's/authorization: enabled/#authorization: enabled/g' /etc/mongod.conf 2>/dev/null || true
-                    sed -i -E 's/authorization: enabled/#authorization: enabled/g' /etc/mongodb.conf 2>/dev/null || true
+                    sed -i -E 's/^security:/#security:/g' /etc/mongod.conf 2>/dev/null || true
+                    sed -i -E 's/.*authorization: enabled.*/#  authorization: enabled/g' /etc/mongod.conf 2>/dev/null || true
+                    sed -i -E 's/^security:/#security:/g' /etc/mongodb.conf 2>/dev/null || true
+                    sed -i -E 's/.*authorization: enabled.*/#  authorization: enabled/g' /etc/mongodb.conf 2>/dev/null || true
                     systemctl restart mongod || systemctl restart mongodb || true
                     sleep 3
                 fi
@@ -450,13 +452,17 @@ EOF
                 # Allow external connections AND ENABLE AUTHENTICATION for cross-VPS access
                 if [ -f /etc/mongod.conf ]; then
                     sed -i -E 's/bindIp:\\s*127\\.0\\.0\\.1.*/bindIp: 0.0.0.0/' /etc/mongod.conf
-                    if ! grep -q "authorization: enabled" /etc/mongod.conf; then
+                    sed -i -E 's/^#security:/security:/g' /etc/mongod.conf 2>/dev/null || true
+                    sed -i -E 's/^#\\s*authorization: enabled/  authorization: enabled/g' /etc/mongod.conf 2>/dev/null || true
+                    if ! grep -E -q "^\\s*authorization: enabled" /etc/mongod.conf; then
                         echo -e "\\nsecurity:\\n  authorization: enabled" >> /etc/mongod.conf
                     fi
                     systemctl restart mongod || true
                 elif [ -f /etc/mongodb.conf ]; then
                     sed -i -E 's/bindIp:\\s*127\\.0\\.0\\.1.*/bindIp: 0.0.0.0/' /etc/mongodb.conf
-                    if ! grep -q "authorization: enabled" /etc/mongodb.conf; then
+                    sed -i -E 's/^#security:/security:/g' /etc/mongodb.conf 2>/dev/null || true
+                    sed -i -E 's/^#\\s*authorization: enabled/  authorization: enabled/g' /etc/mongodb.conf 2>/dev/null || true
+                    if ! grep -E -q "^\\s*authorization: enabled" /etc/mongodb.conf; then
                         echo -e "\\nsecurity:\\n  authorization: enabled" >> /etc/mongodb.conf
                     fi
                     systemctl restart mongodb || true
