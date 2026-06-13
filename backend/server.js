@@ -316,6 +316,19 @@ async function simulateDeployment(server, password) {
             await writeLog("-> SSH Connection established successfully. Running deployment script...");
 
             try {
+                await updateProgress(5);
+                await writeLog("-> Step 0/12: Safety Check - Verifying if domain is already deployed manually on this server...");
+                const safetyCheckCmd = `
+                if [ -d "/var/www/${cleanDomain}" ] || [ -f "/etc/nginx/conf.d/${cleanDomain}.conf" ] || [ -f "/etc/nginx/sites-enabled/${cleanDomain}" ]; then
+                    echo "[ERROR] Domain directory or Nginx config already exists on the server!"
+                    exit 1
+                fi
+                `;
+                const safetyCode = await executeSshCommandStream(conn, safetyCheckCmd, server._id, writeLog);
+                if (safetyCode !== 0) {
+                    throw new Error(`Deployment aborted: The domain "${cleanDomain}" or its Nginx configuration already exists on the server. This usually means it was deployed manually. Please remove the existing manual deployment or use a different domain.`);
+                }
+
                 // Step 1: System Checks & Memory Optimization (10%)
                 await updateProgress(10);
                 await writeLog("-> Step 1/12: Checking target OS details and configuring Swap Memory...");
@@ -481,7 +494,29 @@ EOF
                 await updateProgress(70);
                 await writeLog("-> Step 7/12: Writing backend and frontend env configuration files...");
                 const backendEnvBase64 = Buffer.from(server.backendEnv || '').toString('base64');
-                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir} && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
+                const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir} && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env
+
+                # --- DYNAMIC PORT ALLOCATION ---
+                FREE_PORT=5000
+                while ss -tuln | grep -E -q ":\\$FREE_PORT\\b" || netstat -tuln 2>/dev/null | grep -E -q ":\\$FREE_PORT\\b"; do
+                    FREE_PORT=\\$((FREE_PORT+1))
+                done
+                
+                echo "-> Dynamically assigning free port: \\$FREE_PORT"
+                
+                if grep -q "^PORT=" /var/www/${cleanDomain}/${server.backendDir}/.env; then
+                    sed -i -E "s/^PORT=.*/PORT=\\$FREE_PORT/g" /var/www/${cleanDomain}/${server.backendDir}/.env
+                else
+                    echo -e "\\nPORT=\\$FREE_PORT" >> /var/www/${cleanDomain}/${server.backendDir}/.env
+                fi
+                
+                if grep -q "^PORT=" /var/www/${cleanDomain}/.env; then
+                    sed -i -E "s/^PORT=.*/PORT=\\$FREE_PORT/g" /var/www/${cleanDomain}/.env
+                else
+                    echo -e "\\nPORT=\\$FREE_PORT" >> /var/www/${cleanDomain}/.env
+                fi
+                # -------------------------------
+                `;
                 await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
 
                 const frontendEnvBase64 = Buffer.from(server.frontendEnv || '').toString('base64');
@@ -582,9 +617,9 @@ EOF
                 if command -v setsebool &> /dev/null; then
                     setsebool -P httpd_can_network_connect 1 || true
                 fi
-                # Disable conflicting default configurations if they exist
-                rm -f /etc/nginx/sites-enabled/default
-                rm -f /etc/nginx/conf.d/default.conf
+                # We no longer delete default configurations to preserve any manual Nginx setups the user might have
+                # rm -f /etc/nginx/sites-enabled/default
+                # rm -f /etc/nginx/conf.d/default.conf
                 
                 nginx -t && (systemctl restart nginx || systemctl reload nginx || service nginx restart)
                 `;
@@ -700,7 +735,30 @@ async function simulateRedeploy(server, password) {
         await writeLog("-> Updating backend and frontend environment variables (.env files)...");
 
         const backendEnvBase64 = Buffer.from(server.backendEnv || '').toString('base64');
-        const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir} && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
+        const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir}
+        
+        # --- PRESERVE EXISTING PORT ---
+        EXISTING_PORT=\\$(grep -oP '^PORT=\\s*\\K\\d+' /var/www/${cleanDomain}/${server.backendDir}/.env 2>/dev/null || echo "")
+        
+        echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env
+        echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env
+        
+        if [ -n "\\$EXISTING_PORT" ]; then
+            echo "-> Preserving existing mapped port: \\$EXISTING_PORT"
+            if grep -q "^PORT=" /var/www/${cleanDomain}/${server.backendDir}/.env; then
+                sed -i -E "s/^PORT=.*/PORT=\\$EXISTING_PORT/g" /var/www/${cleanDomain}/${server.backendDir}/.env
+            else
+                echo -e "\\nPORT=\\$EXISTING_PORT" >> /var/www/${cleanDomain}/${server.backendDir}/.env
+            fi
+            
+            if grep -q "^PORT=" /var/www/${cleanDomain}/.env; then
+                sed -i -E "s/^PORT=.*/PORT=\\$EXISTING_PORT/g" /var/www/${cleanDomain}/.env
+            else
+                echo -e "\\nPORT=\\$EXISTING_PORT" >> /var/www/${cleanDomain}/.env
+            fi
+        fi
+        # ------------------------------
+        `;
         await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
 
         const frontendEnvBase64 = Buffer.from(server.frontendEnv || '').toString('base64');
