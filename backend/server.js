@@ -432,7 +432,7 @@ EOF
                 // Now configure the database user
                 await writeLog("-> Configuring local MongoDB database and credentials...");
                 const mongoDbName = server.localMongoDbName || 'erp_school';
-                const mongoUser = 'db_user';
+                const mongoUser = server.localMongoUsername || 'db_user';
                 const mongoUserCmd = `
                 sleep 3
                 mongosh admin --eval "try { db.createUser({user: '${mongoUser}', pwd: '${server.localMongoPassword}', roles: [{role: 'userAdminAnyDatabase', db: 'admin'}, {role: 'readWriteAnyDatabase', db: 'admin'}]}) } catch(e) { db.changeUserPassword('${mongoUser}', '${server.localMongoPassword}') }" || \
@@ -511,7 +511,7 @@ export default defineConfig({
 
                 const buildFrontendCmd = `if [ -f /var/www/${cleanDomain}/${server.frontendDir}/package.json ]; then cd /var/www/${cleanDomain}/${server.frontendDir} && npm run build; elif grep -q '"build"' /var/www/${cleanDomain}/package.json; then cd /var/www/${cleanDomain} && npm run build; fi`;
                 const buildCode = await executeSshCommandStream(conn, buildFrontendCmd, server._id, writeLog);
-                
+
                 if (buildCode !== 0) {
                     throw new Error('Frontend React/Vite build failed due to syntax or import errors in your project code. Please check the logs above to fix your code, push to GitHub, and try Redeploying.');
                 }
@@ -685,7 +685,7 @@ async function simulateRedeploy(server, password) {
         // Update Environment Variables
         await updateProgress(45);
         await writeLog("-> Updating backend and frontend environment variables (.env files)...");
-        
+
         const backendEnvBase64 = Buffer.from(server.backendEnv || '').toString('base64');
         const writeBackendEnv = `mkdir -p /var/www/${cleanDomain}/${server.backendDir} && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/${server.backendDir}/.env && echo "${backendEnvBase64}" | base64 -d > /var/www/${cleanDomain}/.env`;
         await executeSshCommandStream(conn, writeBackendEnv, server._id, writeLog);
@@ -720,7 +720,7 @@ async function simulateRedeploy(server, password) {
         fi
         `;
         const rbCode = await executeSshCommandStream(conn, updateFrontend, server._id, writeLog);
-        
+
         if (rbCode !== 0) {
             throw new Error('Frontend Redeployment Build failed due to errors in your React code. Check the logs above, fix the issues in your repository, and Redeploy again.');
         }
@@ -864,8 +864,9 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
         // Generate dynamic MongoDB DB Name and URL
         const crypto = require('crypto');
         const localMongoDbName = name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'default_db';
+        const localMongoUsername = `db_${localMongoDbName}`.substring(0, 30);
         const localMongoPassword = crypto.randomBytes(16).toString('hex');
-        const localMongoUrl = `mongodb://db_user:${localMongoPassword}@${ipAddress}:27017/${localMongoDbName}?authSource=admin`;
+        const localMongoUrl = `mongodb://${localMongoUsername}:${localMongoPassword}@${ipAddress}:27017/${localMongoDbName}?authSource=admin`;
         const updatedBackendEnv = updateMongoUrlInEnv(backendEnv, localMongoUrl, mongoEnvVarName);
 
         const serverId = `vps-${uuidv4().substring(0, 8)}`;
@@ -889,7 +890,7 @@ app.post('/api/vps/deploy', authenticate, async (req, res) => {
             progress: 0,
             logs: initialLogs,
             localMongoUrl,
-            localMongoUsername: 'db_user',
+            localMongoUsername: localMongoUsername,
             localMongoPassword,
             localMongoDbName,
             port: targetPort,
@@ -949,7 +950,7 @@ app.put('/api/vps/server/:id/env', authenticate, async (req, res) => {
     try {
         const { backendEnv, frontendEnv } = req.body;
         const server = await VpsServer.findOne({ _id: req.params.id, userId: req.user._id });
-        
+
         if (!server) return res.status(404).json({ error: 'Server not found' });
 
         server.backendEnv = backendEnv;
