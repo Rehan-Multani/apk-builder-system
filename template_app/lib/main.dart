@@ -121,6 +121,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
         if (!isOffline) setState(() => isOffline = true);
       } else {
         if (isOffline) {
+          if (mounted) ScaffoldMessenger.of(context).clearSnackBars();
           setState(() => isOffline = false);
           webViewController?.reload();
         }
@@ -220,14 +221,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
         isConfigLoaded = true;
         
-        // Adjust status bar icons based on background color
-        if (splashColor != null) {
-          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light,
-            statusBarBrightness: splashColor!.computeLuminance() > 0.5 ? Brightness.light : Brightness.dark,
-          ));
-        }
+        // Force light status bar icons for black background
+        SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ));
       });
 
       _initFirebase();
@@ -495,7 +494,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: splashColor ?? Colors.black,
+        backgroundColor: Colors.black,
         body: Stack(
           children: [
             if (isConfigLoaded && targetUrl != null)
@@ -533,6 +532,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           final results = await Connectivity().checkConnectivity();
                           if (results.contains(ConnectivityResult.none)) {
                             if (mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Still no internet connection. Please wait...'),
