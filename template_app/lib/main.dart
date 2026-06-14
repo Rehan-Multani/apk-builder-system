@@ -529,9 +529,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo)),
                       const SizedBox(height: 30),
                       ElevatedButton.icon(
-                        onPressed: () {
-                          setState(() => isOffline = false);
-                          webViewController?.reload();
+                        onPressed: () async {
+                          final results = await Connectivity().checkConnectivity();
+                          if (results.contains(ConnectivityResult.none)) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Still no internet connection. Please wait...'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          } else {
+                            setState(() => isOffline = false);
+                            webViewController?.reload();
+                          }
                         },
                         icon: const Icon(Icons.refresh),
                         label: const Text("Retry"),
