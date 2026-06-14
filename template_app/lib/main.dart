@@ -437,7 +437,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
         if (progress == 100) pullToRefreshController?.endRefreshing();
         setState(() {
           this.progress = progress / 100;
-          if (progress > 50) isOffline = false;
           // Smart Splash Screen: hide when progress reaches 100%
           if (progress == 100) isSplashFinished = true;
         });
@@ -446,6 +445,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
         pullToRefreshController?.endRefreshing();
         setState(() {
           isSplashFinished = true;
+        });
+      },
+      onLoadStart: (controller, url) {
+        setState(() {
+          isOffline = false;
         });
       },
       onReceivedError: (controller, request, error) {
@@ -493,6 +497,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 Container(
                   color: Colors.white,
                   width: double.infinity,
+                  height: double.infinity,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
