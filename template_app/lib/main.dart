@@ -11,6 +11,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -95,6 +96,7 @@ class WebViewScreen extends StatefulWidget {
 class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? webViewController;
   PullToRefreshController? pullToRefreshController;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   String? targetUrl;
   String? fcmStoreUrl;
   Map<String, dynamic>? fcmBody;
@@ -114,6 +116,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _loadConfig();
     
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      if (results.contains(ConnectivityResult.none)) {
+        if (!isOffline) setState(() => isOffline = true);
+      } else {
+        if (isOffline) {
+          setState(() => isOffline = false);
+          webViewController?.reload();
+        }
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestAllPermissions();
     });
@@ -129,6 +142,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
         HapticFeedback.mediumImpact();
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
   }
 
   void _setupFirebaseListeners() {
@@ -504,6 +523,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       const Icon(Icons.wifi_off_rounded, size: 80, color: Colors.grey),
                       const SizedBox(height: 20),
                       const Text("No Internet Connection", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black54)),
+                      const SizedBox(height: 10),
+                      const Text("Waiting for network...", style: TextStyle(fontSize: 14, color: Colors.grey)),
+                      const SizedBox(height: 30),
+                      const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo)),
                       const SizedBox(height: 30),
                       ElevatedButton.icon(
                         onPressed: () {
