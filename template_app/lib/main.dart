@@ -110,6 +110,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool useSafeArea = true;
   bool safeAreaTop = true;
   bool safeAreaBottom = false;
+  bool usePaymentGateway = false;
+  String paymentGatewayType = '';
+  String paymentGatewayKey = '';
 
   @override
   void initState() {
@@ -218,6 +221,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
         safeAreaBottom = data['safeAreaBottom'] != null
             ? (data['safeAreaBottom'] == true || data['safeAreaBottom'] == 'true')
             : false;
+            
+        usePaymentGateway = data['usePaymentGateway'] != null
+            ? (data['usePaymentGateway'] == true || data['usePaymentGateway'] == 'true')
+            : false;
+        paymentGatewayType = data['paymentGatewayType']?.toString() ?? 'razorpay';
+        paymentGatewayKey = data['paymentGatewayKey']?.toString() ?? '';
 
         isConfigLoaded = true;
         
@@ -391,6 +400,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
             // Also try to prevent pull-to-refresh overscroll glow if possible
             document.documentElement.style.overscrollBehavior = 'none';
             document.body.style.overscrollBehavior = 'none';
+            
+            \${usePaymentGateway ? '''
+            window.APP_PAYMENT_ACTIVE = true;
+            window.APP_PAYMENT_GATEWAY = '\${paymentGatewayType}';
+            window.APP_PAYMENT_KEY = '\${paymentGatewayKey}';
+            ''' : ''}
           """,
           injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
         ),
@@ -441,6 +456,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
             }
           }
         });
+
+        // Handler for triggering native payment from PWA
+        controller.addJavaScriptHandler(handlerName: 'startNativePayment', callback: (args) {
+          if (args.isNotEmpty) {
+            final data = args[0];
+            debugPrint("PWA requested native payment: \$data");
+            // Native Razorpay/PhonePe SDK logic can be implemented here later.
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Native payment requested for \${data['amount']}')),
+            );
+          }
+        });
       },
       onPermissionRequest: (controller, request) async {
         return PermissionResponse(
@@ -475,15 +502,58 @@ class _WebViewScreenState extends State<WebViewScreen> {
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         var uri = navigationAction.request.url!;
+        String urlString = uri.toString();
+
+        // 1. Check for Android 'intent://' scheme
+        if (uri.scheme == 'intent') {
+          // Parse the intent URI to extract the actual scheme (e.g. paytmmp, upi, phonepe)
+          // Format: intent://pay?pa=...#Intent;scheme=paytmmp;package=...;end
+          if (urlString.contains('#Intent;')) {
+            final parts = urlString.split('#Intent;');
+            final mainPart = parts[0].replaceFirst('intent://', '');
+            final intentParams = parts[1];
+            
+            // Extract scheme
+            String? targetScheme;
+            if (intentParams.contains('scheme=')) {
+              final schemeMatch = RegExp(r'scheme=([^;]+)').firstMatch(intentParams);
+              if (schemeMatch != null) {
+                targetScheme = schemeMatch.group(1);
+              }
+            }
+
+            if (targetScheme != null) {
+              final newUrl = '$targetScheme://$mainPart';
+              try {
+                await launchUrl(Uri.parse(newUrl), mode: LaunchMode.externalApplication);
+                return NavigationActionPolicy.CANCEL;
+              } catch (e) {
+                // If the app is not installed, we can optionally check for fallback_url
+                String? fallbackUrl;
+                if (intentParams.contains('S.browser_fallback_url=')) {
+                  final fallbackMatch = RegExp(r'S\.browser_fallback_url=([^;]+)').firstMatch(intentParams);
+                  if (fallbackMatch != null) {
+                    fallbackUrl = Uri.decodeComponent(fallbackMatch.group(1)!);
+                    await launchUrl(Uri.parse(fallbackUrl), mode: LaunchMode.externalApplication);
+                    return NavigationActionPolicy.CANCEL;
+                  }
+                }
+                debugPrint("Could not launch parsed intent: $newUrl");
+              }
+            }
+          }
+        }
+
+        // 2. Standard external schemes (upi://, phonepe://, paytmmp://, whatsapp://, etc.)
         if (!["http", "https", "file", "chrome", "data", "javascript", "about"].contains(uri.scheme)) {
           try {
-            // Try to launch external intent (like upi://, phonepe://, intent://) directly
             await launchUrl(uri, mode: LaunchMode.externalApplication);
             return NavigationActionPolicy.CANCEL;
           } catch (e) {
             debugPrint("Could not launch $uri: $e");
           }
         }
+        
         return NavigationActionPolicy.ALLOW;
       },
     );

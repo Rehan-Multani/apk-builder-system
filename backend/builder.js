@@ -25,7 +25,7 @@ function getBuildEnv() {
  * Main function to build APK and AAB
  */
 async function buildAPK(data, updateStatus, job) {
-    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName, googleServicesPath, fcmStoreUrl, fcmBody, apiHeaders, splashDuration, useSafeArea, safeAreaTop, safeAreaBottom } = data;
+    const { buildId, url, appName, packageName, splashColor, splashMode, versionName, versionCode, iconPath, splashPath, storePassword, keyPassword, keyAlias, keystoreName, googleServicesPath, fcmStoreUrl, fcmBody, apiHeaders, splashDuration, useSafeArea, safeAreaTop, safeAreaBottom, usePaymentGateway, paymentGatewayType, paymentGatewayKey } = data;
     const baseDir = path.join(__dirname, '../');
     const templateDir = path.join(baseDir, 'template_app');
     const buildDir = path.join(baseDir, 'builds', buildId);
@@ -75,7 +75,10 @@ async function buildAPK(data, updateStatus, job) {
             useFirebase: !!(googleServicesPath && await fs.pathExists(googleServicesPath)),
             useSafeArea: useSafeArea !== undefined ? (useSafeArea === 'true' || useSafeArea === true) : true,
             safeAreaTop: safeAreaTop !== undefined ? (safeAreaTop === 'true' || safeAreaTop === true) : true,
-            safeAreaBottom: safeAreaBottom !== undefined ? (safeAreaBottom === 'true' || safeAreaBottom === true) : false
+            safeAreaBottom: safeAreaBottom !== undefined ? (safeAreaBottom === 'true' || safeAreaBottom === true) : false,
+            usePaymentGateway: usePaymentGateway !== undefined ? (usePaymentGateway === 'true' || usePaymentGateway === true) : false,
+            paymentGatewayType: paymentGatewayType || 'razorpay',
+            paymentGatewayKey: paymentGatewayKey || ''
         };
         await fs.writeJson(configPath, config);
         updateStatus(30);

@@ -30,7 +30,10 @@ const Dashboard = () => {
     apiHeaders: {},
     useSafeArea: true,
     safeAreaTop: true,
-    safeAreaBottom: false
+    safeAreaBottom: false,
+    usePaymentGateway: false,
+    paymentGatewayType: 'razorpay',
+    paymentGatewayKey: ''
   });
   const [googleServices, setGoogleServices] = useState(null);
   const [firebaseAdmin, setFirebaseAdmin] = useState(null);
@@ -131,6 +134,9 @@ const Dashboard = () => {
       data.append('useSafeArea', formData.useSafeArea);
       data.append('safeAreaTop', formData.safeAreaTop);
       data.append('safeAreaBottom', formData.safeAreaBottom);
+      data.append('usePaymentGateway', formData.usePaymentGateway);
+      data.append('paymentGatewayType', formData.paymentGatewayType);
+      data.append('paymentGatewayKey', formData.paymentGatewayKey);
       if (icon) data.append('icon', icon);
       if (splashImage) data.append('splash', splashImage);
       if (googleServices) data.append('googleServices', googleServices);
@@ -590,6 +596,63 @@ const Dashboard = () => {
                           </span>
                         )}
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 7: Payment Gateway Configuration */}
+              <div className="space-y-4 border-t border-slate-800 pt-8">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Rocket className="text-emerald-500" size={18} />
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Payment Gateway Integration (Optional)</h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <input 
+                    type="checkbox" 
+                    id="usePaymentGateway"
+                    className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-indigo-500"
+                    checked={formData.usePaymentGateway}
+                    onChange={(e) => setFormData({...formData, usePaymentGateway: e.target.checked})}
+                  />
+                  <label htmlFor="usePaymentGateway" className="text-xs text-slate-400 cursor-pointer">Enable Payment Gateway Injection</label>
+                </div>
+
+                {formData.usePaymentGateway && (
+                  <div className="grid md:grid-cols-2 gap-4 animate-slide-up">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Gateway Provider</label>
+                      <div className="input-group">
+                        <select 
+                          className="w-full bg-transparent border-none text-sm text-white focus:outline-none focus:ring-0 p-0"
+                          value={formData.paymentGatewayType}
+                          onChange={(e) => setFormData({...formData, paymentGatewayType: e.target.value})}
+                        >
+                          <option value="razorpay" className="bg-slate-900 text-white">Razorpay</option>
+                          <option value="phonepe" className="bg-slate-900 text-white">PhonePe</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        {formData.paymentGatewayType === 'razorpay' ? 'Razorpay Key ID' : 'PhonePe Merchant ID'}
+                      </label>
+                      <div className="input-group">
+                        <input 
+                          type="text" 
+                          placeholder={formData.paymentGatewayType === 'razorpay' ? 'rzp_test_xxxxxx' : 'MERCHANT_ID'}
+                          value={formData.paymentGatewayKey}
+                          onChange={(e) => setFormData({...formData, paymentGatewayKey: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-[10px] text-slate-500 italic">
+                        * The selected Key will be injected into your Web App as <code className="text-indigo-400">window.APP_PAYMENT_KEY</code> and <code className="text-indigo-400">window.APP_PAYMENT_GATEWAY</code> for direct payment implementation in your PWA.
+                      </p>
                     </div>
                   </div>
                 )}
