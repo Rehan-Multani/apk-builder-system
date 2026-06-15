@@ -464,7 +464,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
             debugPrint("PWA requested native payment: \$data");
             // Native Razorpay/PhonePe SDK logic can be implemented here later.
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Native payment requested for \${data['amount']}')),
+              SnackBar(content: Text("Native payment requested for \${data['amount']}")),
             );
           }
         });
