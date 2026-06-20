@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "dev": "nodemon server.js",
+    "dev": "node api.js && nodemon server.js",
     "worker": "node worker.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
