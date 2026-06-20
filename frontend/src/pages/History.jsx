@@ -116,30 +116,30 @@ const History = () => {
                   </td>
                   <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
                     {build.status === 'completed' && (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2 justify-end">
-                          <a 
-                            href={`${BACKEND_URL}${build.apkUrl}`} 
-                            download
-                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
-                          >
-                            <Download size={14} /> APK
-                          </a>
-                          <a 
-                            href={`${BACKEND_URL}${build.aabUrl}`} 
-                            download
-                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold transition-all no-underline"
-                          >
-                            <Download size={14} /> AAB
-                          </a>
-                        </div>
+                      <div className="flex flex-col gap-2 items-end">
                         <a 
-                          href={`${BACKEND_URL}${build.jksUrl}`} 
+                          href={`${BACKEND_URL}${build.apkUrl}`} 
                           download
-                          className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all no-underline hover:bg-slate-600 hover:text-white"
+                          className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-bold transition-all no-underline w-36"
                         >
-                          <Download size={14} /> JKS (Keystore)
+                          <Download size={14} /> Download APK
                         </a>
+                        <a 
+                          href={`${BACKEND_URL}${build.aabUrl}`} 
+                          download
+                          className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all no-underline w-36"
+                        >
+                          <Download size={14} /> Download AAB
+                        </a>
+                        {build.jksUrl && (
+                          <a 
+                            href={`${BACKEND_URL}${build.jksUrl}`} 
+                            download
+                            className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all no-underline hover:bg-slate-600 hover:text-white w-36"
+                          >
+                            <Download size={14} /> Download JKS
+                          </a>
+                        )}
                       </div>
                     )}
                   </td>
